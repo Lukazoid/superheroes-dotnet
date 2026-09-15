@@ -1,6 +1,6 @@
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace Superheroes
 {
@@ -15,7 +15,7 @@ namespace Superheroes
             var response = await _client.GetAsync(CharactersUri);
 
             var responseJson = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<CharactersResponse>(responseJson);
+            return JsonSerializer.Deserialize<CharactersResponse>(responseJson);
         }
     }
 }
