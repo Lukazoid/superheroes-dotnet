@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,20 +6,22 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
+using Superheroes.Application.Caching;
+using Superheroes.Application.Characters;
+using Superheroes.Application.Ports;
 using Xunit;
 
-namespace Superheroes.Tests
+namespace Superheroes.Application.Tests
 {
-    public class CachingCharactersProviderTests
+    public class CachingCharacterLoaderTests
     {
         private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
         private static IOptions<CharactersCacheOptions> OptionsFor(TimeSpan duration) =>
             Options.Create(new CharactersCacheOptions { CacheDuration = duration });
 
-        private static ImmutableDictionary<string, CharacterResponse> SomeResponse() =>
-            new CharacterResponse[] { new HeroResponse { Name = "Batman", Score = 8.3 } }
-                .ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+        private static CharacterCatalogue SomeResponse() =>
+            CharacterCatalogue.Create(new Character[] { new Hero("Batman", 8.3, null) });
 
         // A fresh HybridCache per test - it only coordinates concurrent callers and tracks
         // expiry within a single instance, so each test needs its own to stay isolated.
@@ -40,9 +41,9 @@ namespace Superheroes.Tests
         public async Task ReturnsCachedResponseWithinDuration()
         {
             var cache = NewCache();
-            var inner = Substitute.For<ICharactersProvider>();
+            var inner = Substitute.For<ICharacterLoader>();
             inner.GetCharacters().Returns(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
 
             var first = await sut.GetCharacters();
             var second = await sut.GetCharacters();
@@ -52,7 +53,7 @@ namespace Superheroes.Tests
             // in-process tier) unless the cached type is sealed and [ImmutableObject(true)], so
             // reference equality isn't guaranteed - the call count and the values are what prove
             // the cache did its job.
-            second["Batman"].Name.ShouldBe(first["Batman"].Name);
+            second.Heroes["Batman"].Name.ShouldBe(first.Heroes["Batman"].Name);
         }
 
         [Fact]
@@ -60,28 +61,28 @@ namespace Superheroes.Tests
         {
             // Regression test: HybridCache round-trips cached values through serialization, which
             // does not preserve ImmutableDictionary's key comparer - a cache hit would otherwise
-            // silently come back case-sensitive even though CharactersProvider built it with
-            // OrdinalIgnoreCase.
+            // silently come back case-sensitive even though CharacterCatalogue.Create built it
+            // with OrdinalIgnoreCase.
             var cache = NewCache();
-            var inner = Substitute.For<ICharactersProvider>();
+            var inner = Substitute.For<ICharacterLoader>();
             inner.GetCharacters().Returns(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
 
             await sut.GetCharacters(); // populates the cache
             var second = await sut.GetCharacters(); // served from the cache
 
-            second.ContainsKey("batman").ShouldBeTrue();
-            second["BATMAN"].Name.ShouldBe("Batman");
+            second.Heroes.ContainsKey("batman").ShouldBeTrue();
+            second.Heroes["BATMAN"].Name.ShouldBe("Batman");
         }
 
         [Fact]
         public async Task RefetchesAfterDurationExpires()
         {
             var cache = NewCache();
-            var inner = Substitute.For<ICharactersProvider>();
+            var inner = Substitute.For<ICharacterLoader>();
             inner.GetCharacters().Returns(SomeResponse());
             var shortDuration = TimeSpan.FromMilliseconds(50);
-            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(shortDuration), NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharacterLoader(inner, cache, OptionsFor(shortDuration), NullLogger<CachingCharacterLoader>.Instance);
 
             await sut.GetCharacters();
             await Task.Delay(TimeSpan.FromMilliseconds(250));
@@ -94,9 +95,9 @@ namespace Superheroes.Tests
         public async Task ConcurrentCallsOnColdCacheOnlyFetchOnce()
         {
             var cache = NewCache();
-            var inner = Substitute.For<ICharactersProvider>();
+            var inner = Substitute.For<ICharacterLoader>();
             inner.GetCharacters().Returns(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
 
             await Task.WhenAll(
                 sut.GetCharacters(),
@@ -112,15 +113,15 @@ namespace Superheroes.Tests
         public async Task PropagatesFailureAndDoesNotPoisonTheCache()
         {
             var cache = NewCache();
-            var throwing = Substitute.For<ICharactersProvider>();
-            throwing.GetCharacters().Returns(Task.FromException<ImmutableDictionary<string, CharacterResponse>>(new InvalidOperationException("S3 is unavailable")));
-            var sut = new CachingCharactersProvider(throwing, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
+            var throwing = Substitute.For<ICharacterLoader>();
+            throwing.GetCharacters().Returns(Task.FromException<CharacterCatalogue>(new InvalidOperationException("S3 is unavailable")));
+            var sut = new CachingCharacterLoader(throwing, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
 
             await Should.ThrowAsync<InvalidOperationException>(() => sut.GetCharacters());
 
-            var inner = Substitute.For<ICharactersProvider>();
+            var inner = Substitute.For<ICharacterLoader>();
             inner.GetCharacters().Returns(SomeResponse());
-            var recovered = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
+            var recovered = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
 
             var response = await recovered.GetCharacters();
 
@@ -132,9 +133,9 @@ namespace Superheroes.Tests
         public async Task ZeroDurationDisablesCaching()
         {
             var cache = NewCache();
-            var inner = Substitute.For<ICharactersProvider>();
+            var inner = Substitute.For<ICharacterLoader>();
             inner.GetCharacters().Returns(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(TimeSpan.Zero), NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharacterLoader(inner, cache, OptionsFor(TimeSpan.Zero), NullLogger<CachingCharacterLoader>.Instance);
 
             await sut.GetCharacters();
             await sut.GetCharacters();

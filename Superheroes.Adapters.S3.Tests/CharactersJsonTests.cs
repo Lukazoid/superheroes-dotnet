@@ -2,24 +2,24 @@ using System.Text.Json;
 using Shouldly;
 using Xunit;
 
-namespace Superheroes.Tests
+namespace Superheroes.Adapters.S3.Tests
 {
     /// <summary>
-    /// Characterizes CharactersProvider's JSON deserialization of the S3 characters feed into
-    /// CharactersResponse/CharacterResponse, so the Newtonsoft.Json -> System.Text.Json swap
-    /// changes only the Deserialize helper below and no assertion in this file.
+    /// Characterizes S3CharacterLoader's JSON deserialization of the S3 characters feed into
+    /// CharactersDocument/Character, so the Newtonsoft.Json -> System.Text.Json swap changes only
+    /// the Deserialize helper below and no assertion in this file.
     /// </summary>
     public class CharactersJsonTests
     {
         // The feed puts "type" after "name"/"score", not first as System.Text.Json's
-        // polymorphic reader otherwise requires - see CharactersProvider for the same options.
+        // polymorphic reader otherwise requires - see S3CharacterLoader for the same options.
         private static readonly JsonSerializerOptions SerializerOptions = new()
         {
             AllowOutOfOrderMetadataProperties = true
         };
 
-        private static CharactersResponse Deserialize(string json) =>
-            JsonSerializer.Deserialize<CharactersResponse>(json, SerializerOptions);
+        private static CharactersDocument Deserialize(string json) =>
+            JsonSerializer.Deserialize<CharactersDocument>(json, SerializerOptions);
 
         [Fact]
         public void RealCharactersFeedDeserializesAllElevenItems()
@@ -38,7 +38,7 @@ namespace Superheroes.Tests
 
             var result = Deserialize(json);
 
-            var batman = result.Items[0].ShouldBeOfType<HeroResponse>();
+            var batman = result.Items[0].ShouldBeOfType<Hero>();
             batman.Name.ShouldBe("Batman");
             batman.Score.ShouldBe(8.3);
             batman.Weakness.ShouldBe("Joker");
@@ -59,7 +59,7 @@ namespace Superheroes.Tests
 
             result.Items.ShouldNotBeNull();
             result.Items.Length.ShouldBe(1);
-            var batman = result.Items[0].ShouldBeOfType<HeroResponse>();
+            var batman = result.Items[0].ShouldBeOfType<Hero>();
             batman.Name.ShouldBe("Batman");
             batman.Score.ShouldBe(8.3);
         }
@@ -100,11 +100,11 @@ namespace Superheroes.Tests
 
             var result = Deserialize(json);
 
-            result.Items[0].ShouldBeOfType<HeroResponse>().Weakness.ShouldBe("Joker");
+            result.Items[0].ShouldBeOfType<Hero>().Weakness.ShouldBe("Joker");
         }
 
         [Fact]
-        public void HeroTypeDeserializesToHeroResponse()
+        public void HeroTypeDeserializesToHero()
         {
             const string json = """
                 {"items":[{"name":"Batman","score":8.3,"type":"hero"}]}
@@ -112,21 +112,21 @@ namespace Superheroes.Tests
 
             var result = Deserialize(json);
 
-            result.Items[0].ShouldBeOfType<HeroResponse>();
+            result.Items[0].ShouldBeOfType<Hero>();
         }
 
         [Fact]
-        public void VillainTypeDeserializesToVillainResponseWithNoWeaknessProperty()
+        public void VillainTypeDeserializesToVillainWithNoWeaknessProperty()
         {
-            // VillainResponse has no Weakness property at all - unlike a hero with no
-            // configured weakness (a null Weakness), this isn't representable as null.
+            // Villain has no Weakness property at all - unlike a hero with no configured
+            // weakness (a null Weakness), this isn't representable as null.
             const string json = """
                 {"items":[{"name":"Joker","score":8.2,"type":"villain"}]}
                 """;
 
             var result = Deserialize(json);
 
-            result.Items[0].ShouldBeOfType<VillainResponse>();
+            result.Items[0].ShouldBeOfType<Villain>();
         }
 
         [Fact]
@@ -145,8 +145,8 @@ namespace Superheroes.Tests
         [Fact]
         public void UnknownMemberIsIgnored()
         {
-            // "nickname" has no corresponding property on CharacterResponse. Both serializers
-            // ignore unknown members by default; this pins that it does not throw.
+            // "nickname" has no corresponding property on Character. Both serializers ignore
+            // unknown members by default; this pins that it does not throw.
             const string json = """
                 {"items":[{"name":"Batman","score":8.3,"type":"hero","nickname":"The Dark Knight"}]}
                 """;

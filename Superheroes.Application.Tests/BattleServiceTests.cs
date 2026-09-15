@@ -1,29 +1,38 @@
 using System;
-using System.Collections.Immutable;
-using System.Linq;
-using Xunit;
-using Shouldly;
+using System.Threading.Tasks;
 using NSubstitute;
-using static Superheroes.Tests.BattleTestHost;
+using Shouldly;
+using Superheroes.Application.Battles;
+using Superheroes.Application.Characters;
+using Superheroes.Application.Ports;
+using Xunit;
 
-namespace Superheroes.Tests
+namespace Superheroes.Application.Tests
 {
     /// <summary>
     /// Unit tests for BattleService's business logic - winner selection, weakness
     /// scoring, hero/villain type validation, and feed-matching quirks - exercised
     /// directly against the service with no HTTP host involved. See
-    /// BattleCharacterizationTests.cs for the remaining HTTP/controller-level
+    /// BattleCharacterizationTests.cs (Superheroes.Tests) for the remaining HTTP/controller-level
     /// concerns (routing, response contract, the 400/500 translation) that this
-    /// suite intentionally doesn't re-cover.
+    /// suite intentionally doesn't re-cover. See CharacterCatalogueTests for the duplicate-name
+    /// detection this suite used to pin via its fake provider setup.
     /// </summary>
     public class BattleServiceTests
     {
-        private static BattleService ServiceFor(params CharacterResponse[] characters)
+        private static Character Character(string name, double score, string type, string weakness = null) => type switch
         {
-            var charactersProvider = Substitute.For<ICharactersProvider>();
-            charactersProvider.GetCharacters().Returns(
-                characters.ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase));
-            return new BattleService(charactersProvider);
+            "hero" => new Hero(name, score, weakness),
+            "villain" when weakness is null => new Villain(name, score),
+            "villain" => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown character type.")
+        };
+
+        private static BattleService ServiceFor(params Character[] characters)
+        {
+            var characterLoader = Substitute.For<ICharacterLoader>();
+            characterLoader.GetCharacters().Returns(CharacterCatalogue.Create(characters));
+            return new BattleService(characterLoader);
         }
 
         // ----- Winner selection -----
@@ -199,7 +208,7 @@ namespace Superheroes.Tests
         [Fact]
         public async Task CharacterNameMatchingIsCaseInsensitive()
         {
-            // The dictionary CharactersProvider builds is keyed with OrdinalIgnoreCase, so a
+            // The catalogue's dictionaries are keyed with OrdinalIgnoreCase, so a
             // differently-cased "batman" still matches the "Batman" entry.
             var service = ServiceFor(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
@@ -209,38 +218,16 @@ namespace Superheroes.Tests
             result.Winner.Name.ShouldBe("Batman");
         }
 
-        [Fact]
-        public void DuplicateNamesInFeedThrows()
-        {
-            // The feed is expected to have at most one entry per name (matched
-            // case-insensitively) - ToImmutableDictionary throws rather than silently picking a
-            // winner between the two "Joker" entries. This throws while building the fake
-            // provider's response, before BattleService is even called, since ServiceFor builds
-            // the lookup eagerly - the same as CharactersProvider does per request.
-            Should.Throw<ArgumentException>(() =>
-                ServiceFor(
-                    Character("Batman", 8.3, "hero"),
-                    Character("Joker", 8.6, "villain"),
-                    Character("Joker", 9.9, "villain")));
-        }
-
-        [Fact]
-        public void DuplicateNamesDifferingOnlyByCaseInFeedThrows()
-        {
-            Should.Throw<ArgumentException>(() =>
-                ServiceFor(Character("Joker", 8.2, "villain"), Character("JOKER", 9.9, "villain")));
-        }
-
         // ----- Error paths -----
 
         [Fact]
         public async Task NullFeedThrows()
         {
-            // ICharactersProvider.GetCharacters() returning null (e.g. a failed/undeserializable
-            // S3 response) crashes with a NullReferenceException on "characters.TryGetValue".
-            var charactersProvider = Substitute.For<ICharactersProvider>();
-            charactersProvider.GetCharacters().Returns((ImmutableDictionary<string, CharacterResponse>)null);
-            var service = new BattleService(charactersProvider);
+            // ICharacterLoader.GetCharacters() returning null (e.g. a failed/undeserializable
+            // source response) crashes with a NullReferenceException on "catalogue.Heroes".
+            var characterLoader = Substitute.For<ICharacterLoader>();
+            characterLoader.GetCharacters().Returns((CharacterCatalogue)null);
+            var service = new BattleService(characterLoader);
 
             await Should.ThrowAsync<NullReferenceException>(() => service.Battle("Batman", "Joker"));
         }
