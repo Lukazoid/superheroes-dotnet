@@ -1,4 +1,3 @@
-#nullable enable annotations
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,63 +6,31 @@ namespace Superheroes.Controllers
     [Route("battle")]
     public class BattleController : Controller
     {
-        private readonly ICharactersProvider _charactersProvider;
+        private readonly IBattleService _battleService;
 
-        public BattleController(ICharactersProvider charactersProvider)
+        public BattleController(IBattleService battleService)
         {
-            _charactersProvider = charactersProvider;
+            _battleService = battleService;
         }
 
         // Declared as CharacterResponse (the polymorphic base), not IActionResult, so the
         // output formatter serializes through it and writes the "type" discriminator -
-        // returning Ok(heroCharacter) directly would serialize by heroCharacter's runtime
-        // type instead and silently drop it.
+        // returning Ok(result.Winner) directly would serialize by the winner's runtime type
+        // instead and silently drop it.
         public async Task<ActionResult<CharacterResponse>> Get(string hero, string villain)
         {
-            var characters = await _charactersProvider.GetCharacters();
+            var result = await _battleService.Battle(hero, villain);
 
-            HeroResponse? heroCharacter = null;
-            VillainResponse? villainCharacter = null;
-            foreach(var character in characters.Items)
+            if (!result.Success)
             {
-                if(character is HeroResponse h && string.Equals(h.Name, hero, StringComparison.InvariantCultureIgnoreCase))
+                foreach (var error in result.Errors)
                 {
-                    heroCharacter = h;
+                    ModelState.AddModelError(error.Key, error.Value);
                 }
-                if(character is VillainResponse v && string.Equals(v.Name, villain, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    villainCharacter = v;
-                }
-
-                if (heroCharacter is not null && villainCharacter is not null)
-                    break;
-            }
-
-            if(heroCharacter is null)
-            {
-                ModelState.AddModelError(nameof(hero), "Hero is required");
-            }
-
-            if(villainCharacter is null)
-            {
-                ModelState.AddModelError(nameof(villain), "Villain is required");
-            }
-
-            if (!ModelState.IsValid)
                 return BadRequest(ModelState);
-
-            var heroScore = heroCharacter.Score;
-            if (heroCharacter.Weakness == villainCharacter.Name)
-            {
-                heroScore--;
             }
 
-            if(heroScore > villainCharacter.Score)
-            {
-                return heroCharacter;
-            }
-
-            return villainCharacter;
+            return result.Winner;
         }
     }
 }
