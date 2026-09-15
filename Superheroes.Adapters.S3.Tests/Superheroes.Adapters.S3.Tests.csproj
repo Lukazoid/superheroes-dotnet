@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Superheroes.Adapters.S3\Superheroes.Adapters.S3.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\characters.json" Link="characters.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

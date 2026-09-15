@@ -1,4 +1,7 @@
-using Superheroes;
+using Superheroes.Adapters.S3;
+using Superheroes.Application.Battles;
+using Superheroes.Application.Caching;
+using Superheroes.Application.Ports;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,8 +10,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddHybridCache();
 builder.Services.Configure<CharactersCacheOptions>(builder.Configuration.GetSection("Characters"));
 
-builder.Services.AddSingleton<ICharactersProvider, CharactersProvider>();
-builder.Services.Decorate<ICharactersProvider, CachingCharactersProvider>();
+builder.Services.AddSingleton<ICharacterLoader, S3CharacterLoader>();
+builder.Services.Decorate<ICharacterLoader, CachingCharacterLoader>();
 builder.Services.AddScoped<IBattleService, BattleService>();
 
 var app = builder.Build();
