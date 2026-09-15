@@ -3,11 +3,11 @@ using Superheroes;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddMemoryCache();
+builder.Services.AddHybridCache();
 builder.Services.Configure<CharactersCacheOptions>(builder.Configuration.GetSection("Characters"));
 
-builder.Services.AddKeyedSingleton<ICharactersProvider, CharactersProvider>(CachingCharactersProvider.SourceProviderKey);
-builder.Services.AddSingleton<ICharactersProvider, CachingCharactersProvider>();
+builder.Services.AddSingleton<ICharactersProvider, CharactersProvider>();
+builder.Services.Decorate<ICharactersProvider, CachingCharactersProvider>();
 
 var app = builder.Build();
 

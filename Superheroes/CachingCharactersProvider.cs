@@ -1,8 +1,6 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -10,19 +8,16 @@ namespace Superheroes
 {
     public class CachingCharactersProvider : ICharactersProvider
     {
-        public const string SourceProviderKey = "characters-source";
-
         private const string CacheKey = "characters";
 
         private readonly ICharactersProvider _inner;
-        private readonly IMemoryCache _cache;
+        private readonly HybridCache _cache;
         private readonly TimeSpan _cacheDuration;
         private readonly ILogger<CachingCharactersProvider> _logger;
-        private readonly SemaphoreSlim _refreshLock = new SemaphoreSlim(1, 1);
 
         public CachingCharactersProvider(
-            [FromKeyedServices(SourceProviderKey)] ICharactersProvider inner,
-            IMemoryCache cache,
+            ICharactersProvider inner,
+            HybridCache cache,
             IOptions<CharactersCacheOptions> options,
             ILogger<CachingCharactersProvider> logger)
         {
@@ -32,37 +27,28 @@ namespace Superheroes
             _logger = logger;
         }
 
-        public async Task<CharactersResponse> GetCharacters()
+        public Task<CharactersResponse> GetCharacters()
         {
             if (_cacheDuration <= TimeSpan.Zero)
             {
-                return await _inner.GetCharacters();
+                return _inner.GetCharacters();
             }
 
-            if (_cache.TryGetValue(CacheKey, out CharactersResponse cached))
-            {
-                return cached;
-            }
-
-            await _refreshLock.WaitAsync();
-            try
-            {
-                if (_cache.TryGetValue(CacheKey, out cached))
+            // HybridCache.GetOrCreateAsync guarantees only one concurrent caller per key runs
+            // this factory; every other caller waits for that result instead of also hitting S3.
+            return _cache.GetOrCreateAsync(
+                CacheKey,
+                async cancellationToken =>
                 {
-                    return cached;
-                }
-
-                var response = await _inner.GetCharacters();
-
-                _cache.Set(CacheKey, response, _cacheDuration);
-                _logger.LogInformation("Refreshed characters from source");
-
-                return response;
-            }
-            finally
-            {
-                _refreshLock.Release();
-            }
+                    var response = await _inner.GetCharacters();
+                    _logger.LogInformation("Refreshed characters from source");
+                    return response;
+                },
+                new HybridCacheEntryOptions
+                {
+                    Expiration = _cacheDuration,
+                    LocalCacheExpiration = _cacheDuration
+                }).AsTask();
         }
     }
 }
