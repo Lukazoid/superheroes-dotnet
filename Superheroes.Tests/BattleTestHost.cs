@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 
 namespace Superheroes.Tests
 {
@@ -20,18 +21,19 @@ namespace Superheroes.Tests
 
         private BattleTestHost(CharactersResponse response)
         {
-            var charactersProvider = new FakeCharactersProvider();
-            charactersProvider.FakeResponse(response);
+            var charactersProvider = Substitute.For<ICharactersProvider>();
+            charactersProvider.GetCharacters().Returns(response);
 
             _factory = new WebApplicationFactory<Program>()
                 .WithWebHostBuilder(builder =>
                 {
                     builder.ConfigureServices(services =>
                     {
-                        // Removes both the keyed source registration and the CachingCharactersProvider
-                        // decorator registered around it, replacing the whole chain with the fake.
+                        // Removes the whole ICharactersProvider registration chain (the source
+                        // provider and the CachingCharactersProvider decorated around it),
+                        // replacing it with the substitute.
                         services.RemoveAll(typeof(ICharactersProvider));
-                        services.AddSingleton<ICharactersProvider>(charactersProvider);
+                        services.AddSingleton(charactersProvider);
                     });
                 });
 

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using Shouldly;
 using Xunit;
 
@@ -16,14 +17,6 @@ namespace Superheroes.Tests
 
         private static IOptions<CharactersCacheOptions> OptionsFor(TimeSpan duration) =>
             Options.Create(new CharactersCacheOptions { CacheDuration = duration });
-
-        private class ThrowingCharactersProvider : ICharactersProvider
-        {
-            public Task<CharactersResponse> GetCharacters()
-            {
-                throw new InvalidOperationException("S3 is unavailable");
-            }
-        }
 
         private static CharactersResponse SomeResponse() => new CharactersResponse
         {
@@ -51,18 +44,18 @@ namespace Superheroes.Tests
         public async Task ReturnsCachedResponseWithinDuration()
         {
             var cache = NewCache();
-            var inner = new FakeCharactersProvider();
-            inner.FakeResponse(SomeResponse());
+            var inner = Substitute.For<ICharactersProvider>();
+            inner.GetCharacters().Returns(SomeResponse());
             var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             var first = await sut.GetCharacters();
             var second = await sut.GetCharacters();
 
+            _ = inner.Received(1).GetCharacters();
             // HybridCache deserialises a fresh instance on every read (even from its local,
             // in-process tier) unless the cached type is sealed and [ImmutableObject(true)], so
             // reference equality isn't guaranteed - the call count and the values are what prove
             // the cache did its job.
-            inner.CallCount.ShouldBe(1);
             second.Items.Single().Name.ShouldBe(first.Items.Single().Name);
         }
 
@@ -70,8 +63,8 @@ namespace Superheroes.Tests
         public async Task RefetchesAfterDurationExpires()
         {
             var cache = NewCache();
-            var inner = new FakeCharactersProvider();
-            inner.FakeResponse(SomeResponse());
+            var inner = Substitute.For<ICharactersProvider>();
+            inner.GetCharacters().Returns(SomeResponse());
             var shortDuration = TimeSpan.FromMilliseconds(50);
             var sut = new CachingCharactersProvider(inner, cache, OptionsFor(shortDuration), NullLogger<CachingCharactersProvider>.Instance);
 
@@ -79,15 +72,15 @@ namespace Superheroes.Tests
             await Task.Delay(TimeSpan.FromMilliseconds(250));
             await sut.GetCharacters();
 
-            inner.CallCount.ShouldBe(2);
+            _ = inner.Received(2).GetCharacters();
         }
 
         [Fact]
         public async Task ConcurrentCallsOnColdCacheOnlyFetchOnce()
         {
             var cache = NewCache();
-            var inner = new FakeCharactersProvider();
-            inner.FakeResponse(SomeResponse());
+            var inner = Substitute.For<ICharactersProvider>();
+            inner.GetCharacters().Returns(SomeResponse());
             var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             await Task.WhenAll(
@@ -97,25 +90,26 @@ namespace Superheroes.Tests
                 sut.GetCharacters(),
                 sut.GetCharacters());
 
-            inner.CallCount.ShouldBe(1);
+            _ = inner.Received(1).GetCharacters();
         }
 
         [Fact]
         public async Task PropagatesFailureAndDoesNotPoisonTheCache()
         {
             var cache = NewCache();
-            var throwing = new ThrowingCharactersProvider();
+            var throwing = Substitute.For<ICharactersProvider>();
+            throwing.GetCharacters().Returns(Task.FromException<CharactersResponse>(new InvalidOperationException("S3 is unavailable")));
             var sut = new CachingCharactersProvider(throwing, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             await Should.ThrowAsync<InvalidOperationException>(() => sut.GetCharacters());
 
-            var inner = new FakeCharactersProvider();
-            inner.FakeResponse(SomeResponse());
+            var inner = Substitute.For<ICharactersProvider>();
+            inner.GetCharacters().Returns(SomeResponse());
             var recovered = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             var response = await recovered.GetCharacters();
 
-            inner.CallCount.ShouldBe(1);
+            _ = inner.Received(1).GetCharacters();
             response.ShouldNotBeNull();
         }
 
@@ -123,14 +117,14 @@ namespace Superheroes.Tests
         public async Task ZeroDurationDisablesCaching()
         {
             var cache = NewCache();
-            var inner = new FakeCharactersProvider();
-            inner.FakeResponse(SomeResponse());
+            var inner = Substitute.For<ICharactersProvider>();
+            inner.GetCharacters().Returns(SomeResponse());
             var sut = new CachingCharactersProvider(inner, cache, OptionsFor(TimeSpan.Zero), NullLogger<CachingCharactersProvider>.Instance);
 
             await sut.GetCharacters();
             await sut.GetCharacters();
 
-            inner.CallCount.ShouldBe(2);
+            _ = inner.Received(2).GetCharacters();
         }
     }
 }
