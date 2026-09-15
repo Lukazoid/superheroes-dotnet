@@ -197,7 +197,7 @@ namespace Superheroes.Tests
         }
 
         [Fact]
-        public async Task ResponseContainsOnlyNameScoreTypeAndWeakness()
+        public async Task ResponseForHeroContainsNameScoreTypeAndWeakness()
         {
             using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
@@ -205,6 +205,19 @@ namespace Superheroes.Tests
             var body = await BodyAsJson(response);
 
             body.Select(p => p.Key).ShouldBe(new[] { "name", "score", "type", "weakness" }, ignoreOrder: true);
+        }
+
+        [Fact]
+        public async Task ResponseForVillainContainsNameAndScoreAndTypeButNoWeakness()
+        {
+            // VillainResponse has no Weakness property, so a villain winner's JSON omits the
+            // key entirely rather than reporting it as null the way a hero's does.
+            using var host = WithCharacters(Character("Gamora", 8.4, "hero"), Character("Thanos", 9.9, "villain"));
+
+            var response = await host.Battle("?hero=Gamora&villain=Thanos");
+            var body = await BodyAsJson(response);
+
+            body.Select(p => p.Key).ShouldBe(new[] { "name", "score", "type" }, ignoreOrder: true);
         }
 
         [Fact]

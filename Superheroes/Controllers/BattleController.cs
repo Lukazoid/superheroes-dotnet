@@ -14,22 +14,25 @@ namespace Superheroes.Controllers
             _charactersProvider = charactersProvider;
         }
 
-        
-        public async Task<IActionResult> Get(string hero, string villain)
+        // Declared as CharacterResponse (the polymorphic base), not IActionResult, so the
+        // output formatter serializes through it and writes the "type" discriminator -
+        // returning Ok(heroCharacter) directly would serialize by heroCharacter's runtime
+        // type instead and silently drop it.
+        public async Task<ActionResult<CharacterResponse>> Get(string hero, string villain)
         {
             var characters = await _charactersProvider.GetCharacters();
-            
-            CharacterResponse? heroCharacter = null;
-            CharacterResponse? villainCharacter = null;
+
+            HeroResponse? heroCharacter = null;
+            VillainResponse? villainCharacter = null;
             foreach(var character in characters.Items)
             {
-                if(string.Equals(character.Name, hero, StringComparison.InvariantCultureIgnoreCase) && character.Type == "hero")
+                if(character is HeroResponse h && string.Equals(h.Name, hero, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    heroCharacter = character;
+                    heroCharacter = h;
                 }
-                if(string.Equals(character.Name, villain, StringComparison.InvariantCultureIgnoreCase) && character.Type == "villain")
+                if(character is VillainResponse v && string.Equals(v.Name, villain, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    villainCharacter = character;
+                    villainCharacter = v;
                 }
 
                 if (heroCharacter is not null && villainCharacter is not null)
@@ -40,7 +43,7 @@ namespace Superheroes.Controllers
             {
                 ModelState.AddModelError(nameof(hero), "Hero is required");
             }
-            
+
             if(villainCharacter is null)
             {
                 ModelState.AddModelError(nameof(villain), "Villain is required");
@@ -54,13 +57,13 @@ namespace Superheroes.Controllers
             {
                 heroScore--;
             }
-            
+
             if(heroScore > villainCharacter.Score)
             {
-                return Ok(heroCharacter);
+                return heroCharacter;
             }
-            
-            return Ok(villainCharacter);
+
+            return villainCharacter;
         }
     }
 }
