@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Immutable;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -17,12 +20,16 @@ namespace Superheroes
             AllowOutOfOrderMetadataProperties = true
         };
 
-        public async Task<CharactersResponse> GetCharacters()
+        public async Task<ImmutableDictionary<string, CharacterResponse>> GetCharacters()
         {
             var response = await _client.GetAsync(CharactersUri);
 
             var responseJson = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<CharactersResponse>(responseJson, SerializerOptions);
+            var charactersResponse = JsonSerializer.Deserialize<CharactersResponse>(responseJson, SerializerOptions);
+
+            // Throws if the feed has two entries for the same name (matched case-insensitively)
+            // rather than silently picking a winner.
+            return charactersResponse.Items.ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         }
     }
 }

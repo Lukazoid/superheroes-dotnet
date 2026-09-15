@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Immutable;
+using System.Linq;
 using Xunit;
 using Shouldly;
+using NSubstitute;
 using static Superheroes.Tests.BattleTestHost;
 
 namespace Superheroes.Tests
@@ -16,8 +20,9 @@ namespace Superheroes.Tests
     {
         private static BattleService ServiceFor(params CharacterResponse[] characters)
         {
-            var charactersProvider = new FakeCharactersProvider();
-            charactersProvider.FakeResponse(new CharactersResponse { Items = characters });
+            var charactersProvider = Substitute.For<ICharactersProvider>();
+            charactersProvider.GetCharacters().Returns(
+                characters.ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase));
             return new BattleService(charactersProvider);
         }
 
@@ -194,7 +199,7 @@ namespace Superheroes.Tests
         [Fact]
         public async Task CharacterNameMatchingIsCaseInsensitive()
         {
-            // Names are matched with StringComparison.InvariantCultureIgnoreCase, so a
+            // The dictionary CharactersProvider builds is keyed with OrdinalIgnoreCase, so a
             // differently-cased "batman" still matches the "Batman" entry.
             var service = ServiceFor(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
@@ -205,20 +210,25 @@ namespace Superheroes.Tests
         }
 
         [Fact]
-        public async Task DuplicateNamesInFeedFirstOccurrenceWins()
+        public void DuplicateNamesInFeedThrows()
         {
-            // Both entries named "Joker" match the villain parameter, but the loop breaks
-            // as soon as both hero and villain are found, so the first match in the feed
-            // wins and the second "Joker" entry is never reached.
-            var service = ServiceFor(
-                Character("Batman", 8.3, "hero"),
-                Character("Joker", 8.6, "villain"),
-                Character("Joker", 9.9, "villain"));
+            // The feed is expected to have at most one entry per name (matched
+            // case-insensitively) - ToImmutableDictionary throws rather than silently picking a
+            // winner between the two "Joker" entries. This throws while building the fake
+            // provider's response, before BattleService is even called, since ServiceFor builds
+            // the lookup eagerly - the same as CharactersProvider does per request.
+            Should.Throw<ArgumentException>(() =>
+                ServiceFor(
+                    Character("Batman", 8.3, "hero"),
+                    Character("Joker", 8.6, "villain"),
+                    Character("Joker", 9.9, "villain")));
+        }
 
-            var result = await service.Battle("Batman", "Joker");
-
-            result.Winner.Name.ShouldBe("Joker");
-            result.Winner.Score.ShouldBe(8.6);
+        [Fact]
+        public void DuplicateNamesDifferingOnlyByCaseInFeedThrows()
+        {
+            Should.Throw<ArgumentException>(() =>
+                ServiceFor(Character("Joker", 8.2, "villain"), Character("JOKER", 9.9, "villain")));
         }
 
         // ----- Error paths -----
@@ -227,21 +237,9 @@ namespace Superheroes.Tests
         public async Task NullFeedThrows()
         {
             // ICharactersProvider.GetCharacters() returning null (e.g. a failed/undeserializable
-            // S3 response) crashes with a NullReferenceException on "characters.Items".
-            var charactersProvider = new FakeCharactersProvider();
-            charactersProvider.FakeResponse(null);
-            var service = new BattleService(charactersProvider);
-
-            await Should.ThrowAsync<NullReferenceException>(() => service.Battle("Batman", "Joker"));
-        }
-
-        [Fact]
-        public async Task NullItemsThrows()
-        {
-            // A non-null CharactersResponse with a null Items array crashes the same way,
-            // since "foreach" over a null array throws.
-            var charactersProvider = new FakeCharactersProvider();
-            charactersProvider.FakeResponse(new CharactersResponse { Items = null });
+            // S3 response) crashes with a NullReferenceException on "characters.TryGetValue".
+            var charactersProvider = Substitute.For<ICharactersProvider>();
+            charactersProvider.GetCharacters().Returns((ImmutableDictionary<string, CharacterResponse>)null);
             var service = new BattleService(charactersProvider);
 
             await Should.ThrowAsync<NullReferenceException>(() => service.Battle("Batman", "Joker"));

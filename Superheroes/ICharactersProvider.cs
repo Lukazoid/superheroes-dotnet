@@ -1,9 +1,10 @@
+using System.Collections.Immutable;
 using System.Threading.Tasks;
 
 namespace Superheroes
 {
     public interface ICharactersProvider
     {
-        Task<CharactersResponse> GetCharacters();
+        Task<ImmutableDictionary<string, CharacterResponse>> GetCharacters();
     }
 }
