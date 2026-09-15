@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json;
 using Shouldly;
 using Xunit;
 
@@ -12,7 +12,7 @@ namespace Superheroes.Tests
     public class CharactersJsonTests
     {
         private static CharactersResponse Deserialize(string json) =>
-            JsonConvert.DeserializeObject<CharactersResponse>(json);
+            JsonSerializer.Deserialize<CharactersResponse>(json);
 
         [Fact]
         public void RealCharactersFeedDeserializesAllElevenItems()
