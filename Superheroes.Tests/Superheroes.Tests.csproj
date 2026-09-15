@@ -19,4 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Superheroes\Superheroes.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\characters.json" Link="characters.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
