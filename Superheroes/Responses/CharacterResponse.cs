@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Superheroes
+namespace Superheroes.Responses
 {
     [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
     [JsonDerivedType(typeof(HeroResponse), "hero")]

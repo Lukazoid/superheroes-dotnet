@@ -1,4 +1,4 @@
-namespace Superheroes
+namespace Superheroes.Responses
 {
     public sealed class VillainResponse : CharacterResponse
     {

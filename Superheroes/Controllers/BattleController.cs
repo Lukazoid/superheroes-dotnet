@@ -1,5 +1,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Superheroes.Application.Battles;
+using Superheroes.Responses;
 
 namespace Superheroes.Controllers
 {
@@ -30,7 +32,7 @@ namespace Superheroes.Controllers
                 return BadRequest(ModelState);
             }
 
-            return result.Winner;
+            return result.Winner.ToResponse();
         }
     }
 }

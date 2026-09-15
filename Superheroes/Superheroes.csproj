@@ -18,4 +18,9 @@
     <PackageReference Include="Scrutor" Version="7.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Superheroes.Application\Superheroes.Application.csproj" />
+    <ProjectReference Include="..\Superheroes.Adapters.S3\Superheroes.Adapters.S3.csproj" />
+  </ItemGroup>
+
 </Project>
