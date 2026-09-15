@@ -12,13 +12,20 @@ namespace Superheroes
         private const string CharactersUri = "https://s3.eu-west-2.amazonaws.com/build-circle/characters.json";
         readonly HttpClient _client = new HttpClient();
 
+        // CharacterResponse's "type" discriminator must be readable wherever it falls in the
+        // object - the feed puts it after "name"/"score", not first as System.Text.Json's
+        // polymorphic reader otherwise requires.
+        private static readonly JsonSerializerOptions SerializerOptions = new()
+        {
+            AllowOutOfOrderMetadataProperties = true
+        };
 
         public async Task<ImmutableDictionary<string, CharacterResponse>> GetCharacters()
         {
             var response = await _client.GetAsync(CharactersUri);
 
             var responseJson = await response.Content.ReadAsStringAsync();
-            var charactersResponse = JsonSerializer.Deserialize<CharactersResponse>(responseJson);
+            var charactersResponse = JsonSerializer.Deserialize<CharactersResponse>(responseJson, SerializerOptions);
 
             // Throws if the feed has two entries for the same name (matched case-insensitively)
             // rather than silently picking a winner.

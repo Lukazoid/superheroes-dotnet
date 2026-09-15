@@ -19,7 +19,7 @@ namespace Superheroes.Tests
             Options.Create(new CharactersCacheOptions { CacheDuration = duration });
 
         private static ImmutableDictionary<string, CharacterResponse> SomeResponse() =>
-            new[] { new CharacterResponse { Name = "Batman", Score = 8.3, Type = "hero" } }
+            new CharacterResponse[] { new HeroResponse { Name = "Batman", Score = 8.3 } }
                 .ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
         // A fresh HybridCache per test - it only coordinates concurrent callers and tracks

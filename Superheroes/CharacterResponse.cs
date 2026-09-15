@@ -2,18 +2,15 @@ using System.Text.Json.Serialization;
 
 namespace Superheroes
 {
-    public class CharacterResponse
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+    [JsonDerivedType(typeof(HeroResponse), "hero")]
+    [JsonDerivedType(typeof(VillainResponse), "villain")]
+    public abstract class CharacterResponse
     {
         [JsonPropertyName("name")]
         public string Name { get; set; }
 
         [JsonPropertyName("score")]
         public double Score { get; set; }
-
-        [JsonPropertyName("type")]
-        public string Type { get; set; }
-
-        [JsonPropertyName("weakness")]
-        public string Weakness { get; set; }
     }
 }

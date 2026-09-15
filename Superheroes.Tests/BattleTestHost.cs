@@ -44,8 +44,13 @@ namespace Superheroes.Tests
         public static BattleTestHost WithNullFeed() =>
             new(null);
 
-        public static CharacterResponse Character(string name, double score, string type, string weakness = null) =>
-            new() { Name = name, Score = score, Type = type, Weakness = weakness };
+        public static CharacterResponse Character(string name, double score, string type, string weakness = null) => type switch
+        {
+            "hero" => new HeroResponse { Name = name, Score = score, Weakness = weakness },
+            "villain" when weakness is null => new VillainResponse { Name = name, Score = score },
+            "villain" => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown character type.")
+        };
 
         public Task<HttpResponseMessage> Battle(string queryString = "") =>
             Client.GetAsync("battle" + queryString);

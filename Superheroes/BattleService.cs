@@ -19,18 +19,18 @@ namespace Superheroes
             var characters = await _charactersProvider.GetCharacters();
 
             // The dictionary's keys are already matched case-insensitively (see
-            // CharactersProvider), so no StringComparison is needed here - just the extra
-            // Type check, since a name match alone doesn't guarantee the right role.
-            CharacterResponse? heroCharacter = null;
-            if (hero != null && characters.TryGetValue(hero, out var heroMatch) && heroMatch.Type == "hero")
+            // CharactersProvider), so no StringComparison is needed here - just the type
+            // pattern match, since a name match alone doesn't guarantee the right role.
+            HeroResponse? heroCharacter = null;
+            if (hero != null && characters.TryGetValue(hero, out var heroMatch) && heroMatch is HeroResponse h)
             {
-                heroCharacter = heroMatch;
+                heroCharacter = h;
             }
 
-            CharacterResponse? villainCharacter = null;
-            if (villain != null && characters.TryGetValue(villain, out var villainMatch) && villainMatch.Type == "villain")
+            VillainResponse? villainCharacter = null;
+            if (villain != null && characters.TryGetValue(villain, out var villainMatch) && villainMatch is VillainResponse v)
             {
-                villainCharacter = villainMatch;
+                villainCharacter = v;
             }
 
             var errors = new Dictionary<string, string>();
