@@ -1,10 +1,4 @@
-using System.Text.Json.Serialization;
-
 namespace Superheroes.Adapters.S3
 {
-    public sealed record Hero : Character
-    {
-        [JsonPropertyName("weakness")]
-        public string? Weakness { get; init; }
-    }
+    public sealed record Hero(string Name, double Score, string? Weakness) : Character(Name, Score);
 }

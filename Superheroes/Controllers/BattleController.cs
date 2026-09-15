@@ -6,22 +6,15 @@ using Superheroes.Responses;
 namespace Superheroes.Controllers
 {
     [Route("battle")]
-    public class BattleController : Controller
+    public class BattleController(IBattleService battleService) : Controller
     {
-        private readonly IBattleService _battleService;
-
-        public BattleController(IBattleService battleService)
-        {
-            _battleService = battleService;
-        }
-
         // Declared as CharacterResponse (the polymorphic base), not IActionResult, so the
         // output formatter serializes through it and writes the "type" discriminator -
         // returning Ok(result.Winner) directly would serialize by the winner's runtime type
         // instead and silently drop it.
-        public async Task<ActionResult<CharacterResponse>> Get(string hero, string villain)
+        public async Task<ActionResult<CharacterResponse>> Get(string? hero, string? villain)
         {
-            var result = await _battleService.Battle(hero, villain);
+            var result = await battleService.Battle(hero, villain);
 
             if (!result.Success)
             {
@@ -32,7 +25,9 @@ namespace Superheroes.Controllers
                 return BadRequest(ModelState);
             }
 
-            return result.Winner.ToResponse();
+            // result.Winner is non-null here: Success (Errors.Count == 0) only holds for the
+            // BattleResult.Won path, which always carries a winner - see BattleResult.
+            return result.Winner!.ToResponse();
         }
     }
 }

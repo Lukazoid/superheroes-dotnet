@@ -13,7 +13,7 @@ namespace Superheroes.Tests
     /// </summary>
     internal static class JsonObjectExtensions
     {
-        public static T Value<T>(this JsonObject obj, string propertyName) => obj[propertyName].GetValue<T>();
+        public static T Value<T>(this JsonObject obj, string propertyName) => obj[propertyName]!.GetValue<T>();
     }
 
     /// <summary>
@@ -29,7 +29,7 @@ namespace Superheroes.Tests
         private static async Task<JsonObject> BodyAsJson(HttpResponseMessage response)
         {
             var json = await response.Content.ReadAsStringAsync();
-            return (JsonObject)JsonNode.Parse(json);
+            return (JsonObject)JsonNode.Parse(json)!;
         }
 
         [Fact]
@@ -56,7 +56,7 @@ namespace Superheroes.Tests
 
             var response = await host.Battle("?hero=Batman&villain=Joker");
 
-            response.Content.Headers.ContentType.ToString().ShouldBe("application/json; charset=utf-8");
+            response.Content.Headers.ContentType!.ToString().ShouldBe("application/json; charset=utf-8");
         }
 
         [Fact]
@@ -108,7 +108,7 @@ namespace Superheroes.Tests
             // System.Text.Json, unlike Newtonsoft's JTokenType (which distinguishes Integer from
             // Float), reports a single Number kind for both - so this only pins that "score" is
             // encoded as a raw JSON number rather than a quoted string.
-            body["score"].GetValueKind().ShouldBe(JsonValueKind.Number);
+            body["score"]!.GetValueKind().ShouldBe(JsonValueKind.Number);
         }
 
         // ----- Routing / binding -----
@@ -159,7 +159,7 @@ namespace Superheroes.Tests
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
             var body = await BodyAsJson(response);
-            body["villain"][0].GetValue<string>().ShouldBe("Villain is required");
+            body["villain"]![0]!.GetValue<string>().ShouldBe("Villain is required");
         }
 
         [Fact]

@@ -20,7 +20,7 @@ namespace Superheroes.Application.Tests
     /// </summary>
     public class BattleServiceTests
     {
-        private static Character Character(string name, double score, string type, string weakness = null) => type switch
+        private static Character Character(string name, double score, string type, string? weakness = null) => type switch
         {
             "hero" => new Hero(name, score, weakness),
             "villain" when weakness is null => new Villain(name, score),
@@ -47,7 +47,7 @@ namespace Superheroes.Application.Tests
             var result = await service.Battle("Batman", "Joker");
 
             result.Success.ShouldBeTrue();
-            result.Winner.Name.ShouldBe("Batman");
+            result.Winner!.Name.ShouldBe("Batman");
         }
 
         [Fact]
@@ -57,7 +57,7 @@ namespace Superheroes.Application.Tests
 
             var result = await service.Battle("Gamora", "Thanos");
 
-            result.Winner.Name.ShouldBe("Thanos");
+            result.Winner!.Name.ShouldBe("Thanos");
         }
 
         [Fact]
@@ -68,7 +68,7 @@ namespace Superheroes.Application.Tests
 
             var result = await service.Battle("Batman", "Joker");
 
-            result.Winner.Name.ShouldBe("Joker");
+            result.Winner!.Name.ShouldBe("Joker");
         }
 
         // ----- Weakness scoring -----
@@ -85,7 +85,7 @@ namespace Superheroes.Application.Tests
 
             var result = await service.Battle("Batman", "Joker");
 
-            result.Winner.Name.ShouldBe("Joker");
+            result.Winner!.Name.ShouldBe("Joker");
         }
 
         [Fact]
@@ -100,7 +100,7 @@ namespace Superheroes.Application.Tests
 
             var result = await service.Battle("Batman", "JOKER");
 
-            result.Winner.Name.ShouldBe("JOKER");
+            result.Winner!.Name.ShouldBe("JOKER");
         }
 
         [Fact]
@@ -114,7 +114,7 @@ namespace Superheroes.Application.Tests
 
             var result = await service.Battle("Batman", "Thanos");
 
-            result.Winner.Name.ShouldBe("Batman");
+            result.Winner!.Name.ShouldBe("Batman");
         }
 
         [Fact]
@@ -128,8 +128,8 @@ namespace Superheroes.Application.Tests
 
             var result = await service.Battle("Superman", "Lex Luthor");
 
-            result.Winner.Name.ShouldBe("Superman");
-            result.Winner.Score.ShouldBe(9.6);
+            result.Winner!.Name.ShouldBe("Superman");
+            result.Winner!.Score.ShouldBe(9.6);
         }
 
         // ----- Hero/villain type validation -----
@@ -215,7 +215,7 @@ namespace Superheroes.Application.Tests
             var result = await service.Battle("batman", "Joker");
 
             result.Success.ShouldBeTrue();
-            result.Winner.Name.ShouldBe("Batman");
+            result.Winner!.Name.ShouldBe("Batman");
         }
 
         // ----- Error paths -----
@@ -226,7 +226,7 @@ namespace Superheroes.Application.Tests
             // ICharacterLoader.GetCharacters() returning null (e.g. a failed/undeserializable
             // source response) crashes with a NullReferenceException on "catalogue.Heroes".
             var characterLoader = Substitute.For<ICharacterLoader>();
-            characterLoader.GetCharacters().Returns((CharacterCatalogue)null);
+            characterLoader.GetCharacters().Returns((CharacterCatalogue)null!);
             var service = new BattleService(characterLoader);
 
             await Should.ThrowAsync<NullReferenceException>(() => service.Battle("Batman", "Joker"));

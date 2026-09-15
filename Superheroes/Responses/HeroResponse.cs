@@ -2,9 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Superheroes.Responses
 {
-    public sealed class HeroResponse : CharacterResponse
-    {
-        [JsonPropertyName("weakness")]
-        public string Weakness { get; set; }
-    }
+    public sealed record HeroResponse(
+        string Name,
+        double Score,
+        [property: JsonPropertyName("weakness")] string? Weakness) : CharacterResponse(Name, Score);
 }

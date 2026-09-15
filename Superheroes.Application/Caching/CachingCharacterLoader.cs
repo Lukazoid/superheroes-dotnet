@@ -11,43 +11,32 @@ namespace Superheroes.Application.Caching
     /// (not an adapter project) because caching decorates a port rather than crossing an
     /// external boundary - it works with any ICharacterLoader, not just the S3 one.
     /// </summary>
-    public class CachingCharacterLoader : ICharacterLoader
+    public class CachingCharacterLoader(
+        ICharacterLoader inner,
+        HybridCache cache,
+        IOptions<CharactersCacheOptions> options,
+        ILogger<CachingCharacterLoader> logger) : ICharacterLoader
     {
         private const string CacheKey = "characters";
 
-        private readonly ICharacterLoader _inner;
-        private readonly HybridCache _cache;
-        private readonly TimeSpan _cacheDuration;
-        private readonly ILogger<CachingCharacterLoader> _logger;
-
-        public CachingCharacterLoader(
-            ICharacterLoader inner,
-            HybridCache cache,
-            IOptions<CharactersCacheOptions> options,
-            ILogger<CachingCharacterLoader> logger)
-        {
-            _inner = inner;
-            _cache = cache;
-            _cacheDuration = options.Value.CacheDuration;
-            _logger = logger;
-        }
+        private readonly TimeSpan _cacheDuration = options.Value.CacheDuration;
 
         public async Task<CharacterCatalogue> GetCharacters()
         {
             if (_cacheDuration <= TimeSpan.Zero)
             {
-                return await _inner.GetCharacters();
+                return await inner.GetCharacters();
             }
 
             // HybridCache.GetOrCreateAsync guarantees only one concurrent caller per key runs
             // this factory; every other caller waits for that result instead of also hitting the
             // source loader.
-            var catalogue = await _cache.GetOrCreateAsync(
+            var catalogue = await cache.GetOrCreateAsync(
                 CacheKey,
                 async cancellationToken =>
                 {
-                    var response = await _inner.GetCharacters();
-                    _logger.LogInformation("Refreshed characters from source");
+                    var response = await inner.GetCharacters();
+                    logger.LogInformation("Refreshed characters from source");
                     return response;
                 },
                 new HybridCacheEntryOptions

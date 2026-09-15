@@ -3,18 +3,11 @@ using Superheroes.Application.Ports;
 
 namespace Superheroes.Application.Battles
 {
-    public class BattleService : IBattleService
+    public class BattleService(ICharacterLoader characterLoader) : IBattleService
     {
-        private readonly ICharacterLoader _characterLoader;
-
-        public BattleService(ICharacterLoader characterLoader)
-        {
-            _characterLoader = characterLoader;
-        }
-
         public async Task<BattleResult> Battle(string? hero, string? villain)
         {
-            var catalogue = await _characterLoader.GetCharacters();
+            var catalogue = await characterLoader.GetCharacters();
 
             // The catalogue's dictionaries are already keyed case-insensitively (see
             // CharacterCatalogue.Create), and each is already scoped to one role, so a name that

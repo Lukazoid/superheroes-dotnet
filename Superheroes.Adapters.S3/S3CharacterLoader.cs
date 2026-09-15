@@ -12,11 +12,16 @@ namespace Superheroes.Adapters.S3
         private const string CharactersUri = "https://s3.eu-west-2.amazonaws.com/build-circle/characters.json";
         private readonly HttpClient _client = new HttpClient();
 
-        // Character's "type" discriminator must be readable wherever it falls in the object -
-        // the feed puts it after "name"/"score", not first as System.Text.Json's polymorphic
-        // reader otherwise requires.
+        // The feed's JSON uses lowercase keys ("name", "score", "weakness", "items") against our
+        // PascalCase properties - CamelCase naming policy computes the same lowercase name for
+        // each of these single-word properties, so no per-property [JsonPropertyName] attribute
+        // is needed. It does NOT imply case-insensitive matching - see CharactersJsonTests.
+        // AllowOutOfOrderMetadataProperties is unrelated: it's needed because the feed puts
+        // "type" after "name"/"score", not first as System.Text.Json's polymorphic reader
+        // otherwise requires.
         private static readonly JsonSerializerOptions SerializerOptions = new()
         {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             AllowOutOfOrderMetadataProperties = true
         };
 

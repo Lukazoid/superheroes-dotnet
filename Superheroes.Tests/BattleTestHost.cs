@@ -17,10 +17,13 @@ namespace Superheroes.Tests
 
         public HttpClient Client { get; }
 
-        private BattleTestHost(CharacterCatalogue characters)
+        private BattleTestHost(CharacterCatalogue? characters)
         {
             var characterLoader = Substitute.For<ICharacterLoader>();
-            characterLoader.GetCharacters().Returns(characters);
+            // characters may genuinely be null here (WithNullFeed) - the null-forgiving operator
+            // only keeps NSubstitute's Returns<T> generic inference aligned on T = CharacterCatalogue
+            // rather than CharacterCatalogue?; it doesn't change what's actually returned.
+            characterLoader.GetCharacters().Returns(characters!);
 
             _factory = new WebApplicationFactory<Program>()
                 .WithWebHostBuilder(builder =>
@@ -44,7 +47,7 @@ namespace Superheroes.Tests
         public static BattleTestHost WithNullFeed() =>
             new(null);
 
-        public static Character Character(string name, double score, string type, string weakness = null) => type switch
+        public static Character Character(string name, double score, string type, string? weakness = null) => type switch
         {
             "hero" => new Hero(name, score, weakness),
             "villain" when weakness is null => new Villain(name, score),
