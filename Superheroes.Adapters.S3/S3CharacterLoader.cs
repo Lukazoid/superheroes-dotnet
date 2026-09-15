@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using Superheroes.Application.Ports;
 using Domain = Superheroes.Application.Characters;
@@ -29,8 +30,7 @@ public class S3CharacterLoader : ICharacterLoader
     {
         var response = await _client.GetAsync(CharactersUri);
 
-        var responseJson = await response.Content.ReadAsStringAsync();
-        var document = JsonSerializer.Deserialize<CharactersDocument>(responseJson, SerializerOptions);
+        var document = await response.Content.ReadFromJsonAsync<CharactersDocument>(SerializerOptions);
 
         return Domain.CharacterCatalogue.Create(document!.Items!.Select(Map));
     }
