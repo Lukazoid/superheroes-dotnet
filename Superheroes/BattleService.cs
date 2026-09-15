@@ -18,17 +18,17 @@ namespace Superheroes
         {
             var characters = await _charactersProvider.GetCharacters();
 
-            CharacterResponse? heroCharacter = null;
-            CharacterResponse? villainCharacter = null;
+            HeroResponse? heroCharacter = null;
+            VillainResponse? villainCharacter = null;
             foreach (var character in characters.Items)
             {
-                if (string.Equals(character.Name, hero, StringComparison.InvariantCultureIgnoreCase) && character.Type == "hero")
+                if (character is HeroResponse h && string.Equals(h.Name, hero, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    heroCharacter = character;
+                    heroCharacter = h;
                 }
-                if (string.Equals(character.Name, villain, StringComparison.InvariantCultureIgnoreCase) && character.Type == "villain")
+                if (character is VillainResponse v && string.Equals(v.Name, villain, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    villainCharacter = character;
+                    villainCharacter = v;
                 }
 
                 if (heroCharacter is not null && villainCharacter is not null)

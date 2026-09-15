@@ -13,7 +13,11 @@ namespace Superheroes.Controllers
             _battleService = battleService;
         }
 
-        public async Task<IActionResult> Get(string hero, string villain)
+        // Declared as CharacterResponse (the polymorphic base), not IActionResult, so the
+        // output formatter serializes through it and writes the "type" discriminator -
+        // returning Ok(result.Winner) directly would serialize by the winner's runtime type
+        // instead and silently drop it.
+        public async Task<ActionResult<CharacterResponse>> Get(string hero, string villain)
         {
             var result = await _battleService.Battle(hero, villain);
 
@@ -26,7 +30,7 @@ namespace Superheroes.Controllers
                 return BadRequest(ModelState);
             }
 
-            return Ok(result.Winner);
+            return result.Winner;
         }
     }
 }
