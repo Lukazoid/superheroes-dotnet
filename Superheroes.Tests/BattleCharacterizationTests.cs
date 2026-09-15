@@ -1,12 +1,21 @@
 using Xunit;
 using Shouldly;
 using System.Net;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using static Superheroes.Tests.BattleTestHost;
 
 namespace Superheroes.Tests
 {
+    /// <summary>
+    /// Mirrors Newtonsoft.Json's own JToken.Value&lt;T&gt; extension method so the switch away
+    /// from JObject/JToken below didn't need to touch every assertion call site.
+    /// </summary>
+    internal static class JsonObjectExtensions
+    {
+        public static T Value<T>(this JsonObject obj, string propertyName) => obj[propertyName].GetValue<T>();
+    }
+
     /// <summary>
     /// Pins the current, unrefined behaviour of BattleController's /battle endpoint,
     /// including its bugs, so upcoming changes (weaknesses, hero/villain validation,
@@ -18,10 +27,10 @@ namespace Superheroes.Tests
     /// </summary>
     public class BattleCharacterizationTests
     {
-        private static async Task<JObject> BodyAsJson(HttpResponseMessage response)
+        private static async Task<JsonObject> BodyAsJson(HttpResponseMessage response)
         {
             var json = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<JObject>(json);
+            return (JsonObject)JsonNode.Parse(json);
         }
 
         // ----- Winner selection -----
@@ -158,7 +167,7 @@ namespace Superheroes.Tests
             var response = await host.Battle("?hero=Batman&villain=Joker");
             var body = await BodyAsJson(response);
 
-            body.Properties().Select(p => p.Name).ShouldBe(new[] { "name", "score", "type" }, ignoreOrder: true);
+            body.Select(p => p.Key).ShouldBe(new[] { "name", "score", "type" }, ignoreOrder: true);
         }
 
         [Fact]
@@ -169,7 +178,10 @@ namespace Superheroes.Tests
             var response = await host.Battle("?hero=Batman&villain=Joker");
             var body = await BodyAsJson(response);
 
-            body["score"].Type.ShouldBe(JTokenType.Float);
+            // System.Text.Json, unlike Newtonsoft's JTokenType (which distinguishes Integer from
+            // Float), reports a single Number kind for both - so this only pins that "score" is
+            // encoded as a raw JSON number rather than a quoted string.
+            body["score"].GetValueKind().ShouldBe(JsonValueKind.Number);
         }
 
         // ----- Routing / binding -----
