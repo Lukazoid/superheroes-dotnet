@@ -47,11 +47,11 @@ public sealed class BattleTestHost : IDisposable
     public static BattleTestHost WithNullFeed() =>
         new(null);
 
-    public static Character Character(string name, double score, string type, string? weakness = null) => type switch
+    public static Character Character(string name, double score, CharacterType type, string? weakness = null) => type switch
     {
-        "hero" => new Hero(name, score, weakness),
-        "villain" when weakness is null => new Villain(name, score),
-        "villain" => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
+        CharacterType.Hero => new Hero(name, score, weakness),
+        CharacterType.Villain when weakness is null => new Villain(name, score),
+        CharacterType.Villain => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown character type.")
     };
 

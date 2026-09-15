@@ -20,11 +20,11 @@ namespace Superheroes.Application.Tests;
 /// </summary>
 public class BattleServiceTests
 {
-    private static Character Character(string name, double score, string type, string? weakness = null) => type switch
+    private static Character Character(string name, double score, CharacterType type, string? weakness = null) => type switch
     {
-        "hero" => new Hero(name, score, weakness),
-        "villain" when weakness is null => new Villain(name, score),
-        "villain" => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
+        CharacterType.Hero => new Hero(name, score, weakness),
+        CharacterType.Villain when weakness is null => new Villain(name, score),
+        CharacterType.Villain => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown character type.")
     };
 
@@ -42,7 +42,7 @@ public class BattleServiceTests
     {
         // This Batman has no configured weakness, so no penalty applies - see
         // WeaknessKnocksAPointOffTheHeroScore for the case where one does.
-        var service = ServiceFor(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        var service = ServiceFor(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var result = await service.Battle("Batman", "Joker");
 
@@ -53,7 +53,7 @@ public class BattleServiceTests
     [Fact]
     public async Task HigherScoringVillainWins()
     {
-        var service = ServiceFor(Character("Gamora", 8.4, "hero"), Character("Thanos", 9.9, "villain"));
+        var service = ServiceFor(Character("Gamora", 8.4, CharacterType.Hero), Character("Thanos", 9.9, CharacterType.Villain));
 
         var result = await service.Battle("Gamora", "Thanos");
 
@@ -64,7 +64,7 @@ public class BattleServiceTests
     public async Task EqualScoresReturnTheVillain()
     {
         // The comparison is a strict ">", so a tie falls through to the villain.
-        var service = ServiceFor(Character("Batman", 8.0, "hero"), Character("Joker", 8.0, "villain"));
+        var service = ServiceFor(Character("Batman", 8.0, CharacterType.Hero), Character("Joker", 8.0, CharacterType.Villain));
 
         var result = await service.Battle("Batman", "Joker");
 
@@ -80,8 +80,8 @@ public class BattleServiceTests
         // Confirms README acceptance test #1 via the weakness rule itself, rather than
         // by coincidence of raw score as in HigherScoringHeroWins.
         var service = ServiceFor(
-            Character("Batman", 8.3, "hero", weakness: "Joker"),
-            Character("Joker", 8.2, "villain"));
+            Character("Batman", 8.3, CharacterType.Hero, weakness: "Joker"),
+            Character("Joker", 8.2, CharacterType.Villain));
 
         var result = await service.Battle("Batman", "Joker");
 
@@ -95,8 +95,8 @@ public class BattleServiceTests
         // differently-cased ("JOKER") - the penalty should still apply, consistent with
         // the case-insensitive hero/villain name matching above.
         var service = ServiceFor(
-            Character("Batman", 8.3, "hero", weakness: "Joker"),
-            Character("JOKER", 8.2, "villain"));
+            Character("Batman", 8.3, CharacterType.Hero, weakness: "Joker"),
+            Character("JOKER", 8.2, CharacterType.Villain));
 
         var result = await service.Battle("Batman", "JOKER");
 
@@ -109,8 +109,8 @@ public class BattleServiceTests
         // Batman's weakness is Joker, but he isn't fighting Joker here, so no penalty
         // applies and his raw score (8.3) still beats Thanos's 8.2.
         var service = ServiceFor(
-            Character("Batman", 8.3, "hero", weakness: "Joker"),
-            Character("Thanos", 8.2, "villain"));
+            Character("Batman", 8.3, CharacterType.Hero, weakness: "Joker"),
+            Character("Thanos", 8.2, CharacterType.Villain));
 
         var result = await service.Battle("Batman", "Thanos");
 
@@ -123,8 +123,8 @@ public class BattleServiceTests
         // The -1 penalty affects only the winner comparison; the returned character
         // still carries its raw score, not the weakness-adjusted one.
         var service = ServiceFor(
-            Character("Superman", 9.6, "hero", weakness: "Lex Luthor"),
-            Character("Lex Luthor", 8, "villain"));
+            Character("Superman", 9.6, CharacterType.Hero, weakness: "Lex Luthor"),
+            Character("Lex Luthor", 8, CharacterType.Villain));
 
         var result = await service.Battle("Superman", "Lex Luthor");
 
@@ -137,7 +137,7 @@ public class BattleServiceTests
     [Fact]
     public async Task HeroVersusHeroIsInvalid()
     {
-        var service = ServiceFor(Character("Batman", 8.3, "hero"), Character("Superman", 9.6, "hero"));
+        var service = ServiceFor(Character("Batman", 8.3, CharacterType.Hero), Character("Superman", 9.6, CharacterType.Hero));
 
         var result = await service.Battle("Batman", "Superman");
 
@@ -148,7 +148,7 @@ public class BattleServiceTests
     [Fact]
     public async Task VillainVersusVillainIsInvalid()
     {
-        var service = ServiceFor(Character("Joker", 8.2, "villain"), Character("Thanos", 9.9, "villain"));
+        var service = ServiceFor(Character("Joker", 8.2, CharacterType.Villain), Character("Thanos", 9.9, CharacterType.Villain));
 
         var result = await service.Battle("Joker", "Thanos");
 
@@ -161,7 +161,7 @@ public class BattleServiceTests
     {
         // A single character has one Type, so using the same name for both hero and
         // villain can never satisfy both checks at once.
-        var service = ServiceFor(Character("Batman", 8.3, "hero"));
+        var service = ServiceFor(Character("Batman", 8.3, CharacterType.Hero));
 
         var result = await service.Battle("Batman", "Batman");
 
@@ -172,7 +172,7 @@ public class BattleServiceTests
     [Fact]
     public async Task UnknownHeroIsInvalid()
     {
-        var service = ServiceFor(Character("Superman", 9.6, "hero"), Character("Joker", 8.2, "villain"));
+        var service = ServiceFor(Character("Superman", 9.6, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var result = await service.Battle("NobodyKnown", "Joker");
 
@@ -183,7 +183,7 @@ public class BattleServiceTests
     [Fact]
     public async Task UnknownVillainIsInvalid()
     {
-        var service = ServiceFor(Character("Superman", 9.6, "hero"), Character("Joker", 8.2, "villain"));
+        var service = ServiceFor(Character("Superman", 9.6, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var result = await service.Battle("Superman", "NobodyKnown");
 
@@ -194,7 +194,7 @@ public class BattleServiceTests
     [Fact]
     public async Task BothNamesMissingReportsBothErrors()
     {
-        var service = ServiceFor(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        var service = ServiceFor(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var result = await service.Battle(null, null);
 
@@ -210,7 +210,7 @@ public class BattleServiceTests
     {
         // The catalogue's dictionaries are keyed with OrdinalIgnoreCase, so a
         // differently-cased "batman" still matches the "Batman" entry.
-        var service = ServiceFor(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        var service = ServiceFor(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var result = await service.Battle("batman", "Joker");
 

@@ -2,6 +2,7 @@ using Xunit;
 using Shouldly;
 using System.Net;
 using System.Text.Json.Nodes;
+using Superheroes.Application.Characters;
 using static Superheroes.Tests.BattleTestHost;
 
 namespace Superheroes.Tests;
@@ -17,7 +18,7 @@ public class OpenApiDocumentTests
     [Fact]
     public async Task DocumentDescribesBothBattleResponseCodes()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Client.GetAsync("openapi/v1.json");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -32,7 +33,7 @@ public class OpenApiDocumentTests
     [Fact]
     public async Task DocumentDescribesHeroAndVillainAsDiscriminatedVariantsOfCharacterResponse()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Client.GetAsync("openapi/v1.json");
         var document = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;

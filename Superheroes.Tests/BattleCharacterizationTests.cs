@@ -3,6 +3,7 @@ using Shouldly;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Superheroes.Application.Characters;
 using static Superheroes.Tests.BattleTestHost;
 
 namespace Superheroes.Tests;
@@ -38,7 +39,7 @@ public class BattleCharacterizationTests
         // End-to-end sanity check that DI resolves IBattleService and the controller
         // wires its result through correctly - the winner-selection rules themselves
         // are BattleServiceTests' job.
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Battle("?hero=Batman&villain=Joker");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -52,7 +53,7 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task ReturnsJsonContentType()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Battle("?hero=Batman&villain=Joker");
 
@@ -64,7 +65,7 @@ public class BattleCharacterizationTests
     {
         // Serialized with the default System.Text.Json formatter (AddNewtonsoftJson is
         // never called), so property names are camelCase, not PascalCase.
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Battle("?hero=Batman&villain=Joker");
         var body = await BodyAsJson(response);
@@ -76,7 +77,7 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task ResponseForHeroContainsNameScoreTypeAndWeakness()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Battle("?hero=Batman&villain=Joker");
         var body = await BodyAsJson(response);
@@ -89,7 +90,7 @@ public class BattleCharacterizationTests
     {
         // VillainResponse has no Weakness property, so a villain winner's JSON omits the
         // key entirely rather than reporting it as null the way a hero's does.
-        using var host = WithCharacters(Character("Gamora", 8.4, "hero"), Character("Thanos", 9.9, "villain"));
+        using var host = WithCharacters(Character("Gamora", 8.4, CharacterType.Hero), Character("Thanos", 9.9, CharacterType.Villain));
 
         var response = await host.Battle("?hero=Gamora&villain=Thanos");
         var body = await BodyAsJson(response);
@@ -100,7 +101,7 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task ScoreIsSerialisedAsJsonNumber()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Battle("?hero=Batman&villain=Joker");
         var body = await BodyAsJson(response);
@@ -116,7 +117,7 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task EndpointRespondsToGet()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Send(HttpMethod.Get, "?hero=Batman&villain=Joker");
 
@@ -132,7 +133,7 @@ public class BattleCharacterizationTests
         // The action is decorated with [HttpGet] so it can be described in the OpenAPI
         // document (which has no way to express "matches any verb"), so attribute
         // routing now matches the path but rejects every other HTTP method.
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Send(new HttpMethod(verb), "?hero=Batman&villain=Joker");
 
@@ -146,7 +147,7 @@ public class BattleCharacterizationTests
         // case-insensitively regardless of the action signature's casing. This is MVC
         // model binding, distinct from BattleService's own case-insensitive character
         // name matching (see BattleServiceTests.CharacterNameMatchingIsCaseInsensitive).
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
 
         var response = await host.Battle("?Hero=Batman&Villain=Joker");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -163,7 +164,7 @@ public class BattleCharacterizationTests
         // One representative case proving the controller turns a BattleResult's Errors
         // into a 400 with a ModelState-shaped JSON body. The full validation matrix
         // (hero-vs-hero, unknown names, etc.) lives in BattleServiceTests.cs.
-        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Superman", 9.6, "hero"));
+        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Superman", 9.6, CharacterType.Hero));
 
         var response = await host.Battle("?hero=Batman&villain=Superman");
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
