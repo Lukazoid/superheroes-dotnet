@@ -19,13 +19,8 @@ namespace Superheroes.Tests
             Options.Create(new CharactersCacheOptions { CacheDuration = duration });
 
         private static ImmutableDictionary<string, CharacterResponse> SomeResponse() =>
-            CharacterLookup.Build(new CharactersResponse
-            {
-                Items = new[]
-                {
-                    new CharacterResponse { Name = "Batman", Score = 8.3, Type = "hero" }
-                }
-            });
+            new[] { new CharacterResponse { Name = "Batman", Score = 8.3, Type = "hero" } }
+                .ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
         // A fresh HybridCache per test - it only coordinates concurrent callers and tracks
         // expiry within a single instance, so each test needs its own to stay isolated.

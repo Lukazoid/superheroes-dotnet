@@ -217,45 +217,40 @@ namespace Superheroes.Tests
         }
 
         [Fact]
-        public async Task CharacterNameMatchingIsCaseSensitive()
+        public async Task CharacterNameMatchingIsCaseInsensitive()
         {
-            // Combines the case-sensitive dictionary lookup with the static-field leak: after
-            // priming with Aquaman as the hero, a differently-cased "batman" does NOT match
-            // the "Batman" entry, so the stale Aquaman value (score 3.5) is compared instead
-            // and loses to Joker. A case-insensitive match would have picked up Batman
-            // (8.3) and produced the opposite winner.
-            using var host = WithCharacters(
-                Character("Batman", 8.3, "hero"),
-                Character("Joker", 8.2, "villain"),
-                Character("Aquaman", 3.5, "hero"));
-
-            await host.Battle("?hero=Aquaman&villain=Joker"); // primes _character1 = Aquaman (3.5)
+            // CharactersProvider builds the lookup with OrdinalIgnoreCase, so a differently-cased
+            // "batman" still resolves the "Batman" entry.
+            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
             var response = await host.Battle("?hero=batman&villain=Joker");
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
             var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Joker");
+            body.Value<string>("name").ShouldBe("Batman");
         }
 
         // ----- Feed quirks -----
 
         [Fact]
-        public async Task DuplicateNamesInFeedLastOccurrenceWins()
+        public void DuplicateNamesInFeedThrows()
         {
-            // Both entries named "Joker" have the same lookup key; CharacterLookup.Build folds
-            // the feed in order and keeps overwriting that key, so whichever occurs last wins.
-            using var host = WithCharacters(
-                Character("Batman", 8.3, "hero"),
-                Character("Joker", 8.2, "villain"),
-                Character("Joker", 9.9, "villain"));
+            // The feed is expected to have at most one entry per name (matched case-insensitively) -
+            // ToImmutableDictionary throws rather than silently picking a winner between the two
+            // "Joker" entries. This throws while building the test host, before any HTTP call, since
+            // WithCharacters builds the lookup eagerly - the same as CharactersProvider does per request.
+            Should.Throw<ArgumentException>(() =>
+                WithCharacters(
+                    Character("Batman", 8.3, "hero"),
+                    Character("Joker", 8.2, "villain"),
+                    Character("Joker", 9.9, "villain")));
+        }
 
-            var response = await host.Battle("?hero=Batman&villain=Joker");
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Joker");
-            body.Value<double>("score").ShouldBe(9.9);
+        [Fact]
+        public void DuplicateNamesDifferingOnlyByCaseInFeedThrows()
+        {
+            Should.Throw<ArgumentException>(() =>
+                WithCharacters(Character("Joker", 8.2, "villain"), Character("JOKER", 9.9, "villain")));
         }
 
         [Fact]
@@ -280,8 +275,7 @@ namespace Superheroes.Tests
         public async Task NullFeedFails()
         {
             // ICharactersProvider.GetCharacters() returning null (e.g. a failed/undeserializable
-            // S3 response, or CharacterLookup.Build throwing on a null Items array - see
-            // CharacterLookupTests) crashes with a NullReferenceException on "characters.TryGetValue".
+            // S3 response) crashes with a NullReferenceException on "characters.TryGetValue".
             using var host = WithNullFeed();
 
             var response = await host.Battle("?hero=Batman&villain=Joker");
@@ -324,21 +318,58 @@ namespace Superheroes.Tests
             body.Value<string>("name").ShouldBe("Thanos");
         }
 
+        // ----- Required parameters -----
+
         [Fact]
-        public async Task MissingQueryParametersReuseThePreviousBattle()
+        public async Task MissingBothParametersReturnsBadRequest()
         {
-            // With no "hero"/"villain" query parameters at all (both bind to null), no feed
-            // entry ever matches, so the endpoint just replays the previous comparison.
             using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
-            var priming = await host.Battle("?hero=Batman&villain=Joker");
-            (await BodyAsJson(priming)).Value<string>("name").ShouldBe("Batman"); // sanity check the prime
-
             var response = await host.Battle();
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Batman");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task MissingHeroReturnsBadRequest()
+        {
+            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+
+            var response = await host.Battle("?villain=Joker");
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task MissingVillainReturnsBadRequest()
+        {
+            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+
+            var response = await host.Battle("?hero=Batman");
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task EmptyHeroReturnsBadRequest()
+        {
+            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+
+            var response = await host.Battle("?hero=&villain=Joker");
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task RequiredParameterValidationRunsBeforeFetchingCharacters()
+        {
+            // A missing parameter is rejected without ever calling GetCharacters(), so a bad
+            // request doesn't cost a cache lookup or an S3 fetch.
+            using var host = WithNullFeed();
+
+            var response = await host.Battle("?villain=Joker");
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         }
 
         [Fact]

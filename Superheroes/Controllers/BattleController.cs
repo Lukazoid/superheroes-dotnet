@@ -17,13 +17,18 @@ namespace Superheroes.Controllers
 
         public async Task<IActionResult> Get(string hero, string villain)
         {
+            if(string.IsNullOrEmpty(hero) || string.IsNullOrEmpty(villain))
+            {
+                return BadRequest();
+            }
+
             var characters = await _charactersProvider.GetCharacters();
 
-            if(hero != null && characters.TryGetValue(hero, out var heroCharacter))
+            if(characters.TryGetValue(hero, out var heroCharacter))
             {
                 _character1 = heroCharacter;
             }
-            if(villain != null && characters.TryGetValue(villain, out var villainCharacter))
+            if(characters.TryGetValue(villain, out var villainCharacter))
             {
                 _character2 = villainCharacter;
             }

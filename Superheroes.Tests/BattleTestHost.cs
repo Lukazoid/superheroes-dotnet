@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -42,7 +43,7 @@ namespace Superheroes.Tests
         }
 
         public static BattleTestHost WithCharacters(params CharacterResponse[] characters) =>
-            new(CharacterLookup.Build(new CharactersResponse { Items = characters }));
+            new(characters.ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase));
 
         public static BattleTestHost WithNullFeed() =>
             new(null);
