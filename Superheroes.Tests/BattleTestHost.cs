@@ -41,9 +41,6 @@ namespace Superheroes.Tests
         public static BattleTestHost WithNullFeed() =>
             new(null);
 
-        public static BattleTestHost WithNullItems() =>
-            new(new CharactersResponse { Items = null });
-
         public static CharacterResponse Character(string name, double score, string type, string weakness = null) =>
             new() { Name = name, Score = score, Type = type, Weakness = weakness };
 

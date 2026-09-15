@@ -4,6 +4,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddSingleton<ICharactersProvider, CharactersProvider>();
+builder.Services.AddScoped<IBattleService, BattleService>();
 
 var app = builder.Build();
 

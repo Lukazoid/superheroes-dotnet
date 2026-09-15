@@ -1,4 +1,3 @@
-#nullable enable annotations
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,60 +6,27 @@ namespace Superheroes.Controllers
     [Route("battle")]
     public class BattleController : Controller
     {
-        private readonly ICharactersProvider _charactersProvider;
+        private readonly IBattleService _battleService;
 
-        public BattleController(ICharactersProvider charactersProvider)
+        public BattleController(IBattleService battleService)
         {
-            _charactersProvider = charactersProvider;
+            _battleService = battleService;
         }
 
-        
         public async Task<IActionResult> Get(string hero, string villain)
         {
-            var characters = await _charactersProvider.GetCharacters();
-            
-            CharacterResponse? heroCharacter = null;
-            CharacterResponse? villainCharacter = null;
-            foreach(var character in characters.Items)
+            var result = await _battleService.Battle(hero, villain);
+
+            if (!result.Success)
             {
-                if(string.Equals(character.Name, hero, StringComparison.InvariantCultureIgnoreCase) && character.Type == "hero")
+                foreach (var error in result.Errors)
                 {
-                    heroCharacter = character;
+                    ModelState.AddModelError(error.Key, error.Value);
                 }
-                if(string.Equals(character.Name, villain, StringComparison.InvariantCultureIgnoreCase) && character.Type == "villain")
-                {
-                    villainCharacter = character;
-                }
-
-                if (heroCharacter is not null && villainCharacter is not null)
-                    break;
-            }
-
-            if(heroCharacter is null)
-            {
-                ModelState.AddModelError(nameof(hero), "Hero is required");
-            }
-            
-            if(villainCharacter is null)
-            {
-                ModelState.AddModelError(nameof(villain), "Villain is required");
-            }
-
-            if (!ModelState.IsValid)
                 return BadRequest(ModelState);
+            }
 
-            var heroScore = heroCharacter.Score;
-            if (heroCharacter.Weakness == villainCharacter.Name)
-            {
-                heroScore--;
-            }
-            
-            if(heroScore > villainCharacter.Score)
-            {
-                return Ok(heroCharacter);
-            }
-            
-            return Ok(villainCharacter);
+            return Ok(result.Winner);
         }
     }
 }
