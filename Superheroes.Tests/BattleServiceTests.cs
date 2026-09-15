@@ -75,6 +75,21 @@ namespace Superheroes.Tests
         }
 
         [Fact]
+        public async Task WeaknessMatchingIsCaseInsensitive()
+        {
+            // Batman's weakness is stored as "Joker", but the feed's villain entry is
+            // differently-cased ("JOKER") - the penalty should still apply, consistent with
+            // the case-insensitive hero/villain name matching above.
+            var service = ServiceFor(
+                Character("Batman", 8.3, "hero", weakness: "Joker"),
+                Character("JOKER", 8.2, "villain"));
+
+            var result = await service.Battle("Batman", "JOKER");
+
+            result.Winner.Name.ShouldBe("JOKER");
+        }
+
+        [Fact]
         public async Task WeaknessOnlyAppliesAgainstTheNamedVillain()
         {
             // Batman's weakness is Joker, but he isn't fighting Joker here, so no penalty

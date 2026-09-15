@@ -49,7 +49,7 @@ namespace Superheroes
                 return BattleResult.Invalid(errors);
 
             var heroScore = heroCharacter.Score;
-            if (heroCharacter.Weakness == villainCharacter.Name)
+            if (string.Equals(heroCharacter.Weakness, villainCharacter.Name, StringComparison.InvariantCultureIgnoreCase))
             {
                 heroScore--;
             }
