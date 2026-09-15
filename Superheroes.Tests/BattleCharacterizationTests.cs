@@ -113,20 +113,30 @@ public class BattleCharacterizationTests
 
     // ----- Routing / binding -----
 
+    [Fact]
+    public async Task EndpointRespondsToGet()
+    {
+        using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
+
+        var response = await host.Send(HttpMethod.Get, "?hero=Batman&villain=Joker");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     [Theory]
-    [InlineData("GET")]
     [InlineData("POST")]
     [InlineData("PUT")]
     [InlineData("DELETE")]
-    public async Task EndpointRespondsToAnyHttpVerb(string verb)
+    public async Task EndpointRejectsOtherHttpVerbs(string verb)
     {
-        // The action has no [HttpGet] (or any other verb) attribute, so attribute
-        // routing matches it against every HTTP method.
+        // The action is decorated with [HttpGet] so it can be described in the OpenAPI
+        // document (which has no way to express "matches any verb"), so attribute
+        // routing now matches the path but rejects every other HTTP method.
         using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
         var response = await host.Send(new HttpMethod(verb), "?hero=Batman&villain=Joker");
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
     }
 
     [Fact]

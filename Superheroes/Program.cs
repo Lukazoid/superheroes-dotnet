@@ -6,6 +6,7 @@ using Superheroes.Application.Ports;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddOpenApi();
 builder.Services.AddHybridCache();
 builder.Services.Configure<CharactersCacheOptions>(builder.Configuration.GetSection("Characters"));
 
@@ -18,6 +19,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
+    app.MapOpenApi();
 }
 
 app.MapControllers();
