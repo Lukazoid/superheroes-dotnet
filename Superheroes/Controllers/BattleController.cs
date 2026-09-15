@@ -18,17 +18,14 @@ namespace Superheroes.Controllers
         public async Task<IActionResult> Get(string hero, string villain)
         {
             var characters = await _charactersProvider.GetCharacters();
-            
-            foreach(var character in characters.Items)
+
+            if(hero != null && characters.TryGetValue(hero, out var heroCharacter))
             {
-                if(character.Name == hero)
-                {
-                    _character1 = character;
-                }
-                if(character.Name == villain)
-                {
-                    _character2 = character;
-                }
+                _character1 = heroCharacter;
+            }
+            if(villain != null && characters.TryGetValue(villain, out var villainCharacter))
+            {
+                _character2 = villainCharacter;
             }
 
             if(_character1.Score > _character2.Score)

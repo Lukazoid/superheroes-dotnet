@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,13 +18,14 @@ namespace Superheroes.Tests
         private static IOptions<CharactersCacheOptions> OptionsFor(TimeSpan duration) =>
             Options.Create(new CharactersCacheOptions { CacheDuration = duration });
 
-        private static CharactersResponse SomeResponse() => new CharactersResponse
-        {
-            Items = new[]
+        private static ImmutableDictionary<string, CharacterResponse> SomeResponse() =>
+            CharacterLookup.Build(new CharactersResponse
             {
-                new CharacterResponse { Name = "Batman", Score = 8.3, Type = "hero" }
-            }
-        };
+                Items = new[]
+                {
+                    new CharacterResponse { Name = "Batman", Score = 8.3, Type = "hero" }
+                }
+            });
 
         // A fresh HybridCache per test - it only coordinates concurrent callers and tracks
         // expiry within a single instance, so each test needs its own to stay isolated.
@@ -56,7 +57,7 @@ namespace Superheroes.Tests
             // in-process tier) unless the cached type is sealed and [ImmutableObject(true)], so
             // reference equality isn't guaranteed - the call count and the values are what prove
             // the cache did its job.
-            second.Items.Single().Name.ShouldBe(first.Items.Single().Name);
+            second["Batman"].Name.ShouldBe(first["Batman"].Name);
         }
 
         [Fact]
@@ -98,7 +99,7 @@ namespace Superheroes.Tests
         {
             var cache = NewCache();
             var throwing = Substitute.For<ICharactersProvider>();
-            throwing.GetCharacters().Returns(Task.FromException<CharactersResponse>(new InvalidOperationException("S3 is unavailable")));
+            throwing.GetCharacters().Returns(Task.FromException<ImmutableDictionary<string, CharacterResponse>>(new InvalidOperationException("S3 is unavailable")));
             var sut = new CachingCharactersProvider(throwing, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             await Should.ThrowAsync<InvalidOperationException>(() => sut.GetCharacters());

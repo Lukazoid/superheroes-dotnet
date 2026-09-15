@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
@@ -27,7 +28,7 @@ namespace Superheroes
             _logger = logger;
         }
 
-        public Task<CharactersResponse> GetCharacters()
+        public Task<ImmutableDictionary<string, CharacterResponse>> GetCharacters()
         {
             if (_cacheDuration <= TimeSpan.Zero)
             {

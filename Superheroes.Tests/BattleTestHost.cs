@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -19,10 +20,10 @@ namespace Superheroes.Tests
 
         public HttpClient Client { get; }
 
-        private BattleTestHost(CharactersResponse response)
+        private BattleTestHost(ImmutableDictionary<string, CharacterResponse> characters)
         {
             var charactersProvider = Substitute.For<ICharactersProvider>();
-            charactersProvider.GetCharacters().Returns(response);
+            charactersProvider.GetCharacters().Returns(characters);
 
             _factory = new WebApplicationFactory<Program>()
                 .WithWebHostBuilder(builder =>
@@ -41,13 +42,10 @@ namespace Superheroes.Tests
         }
 
         public static BattleTestHost WithCharacters(params CharacterResponse[] characters) =>
-            new(new CharactersResponse { Items = characters });
+            new(CharacterLookup.Build(new CharactersResponse { Items = characters }));
 
         public static BattleTestHost WithNullFeed() =>
             new(null);
-
-        public static BattleTestHost WithNullItems() =>
-            new(new CharactersResponse { Items = null });
 
         public static CharacterResponse Character(string name, double score, string type) =>
             new() { Name = name, Score = score, Type = type };

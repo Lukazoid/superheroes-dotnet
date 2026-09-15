@@ -219,7 +219,7 @@ namespace Superheroes.Tests
         [Fact]
         public async Task CharacterNameMatchingIsCaseSensitive()
         {
-            // Combines the case-sensitive "==" name match with the static-field leak: after
+            // Combines the case-sensitive dictionary lookup with the static-field leak: after
             // priming with Aquaman as the hero, a differently-cased "batman" does NOT match
             // the "Batman" entry, so the stale Aquaman value (score 3.5) is compared instead
             // and loses to Joker. A case-insensitive match would have picked up Batman
@@ -243,8 +243,8 @@ namespace Superheroes.Tests
         [Fact]
         public async Task DuplicateNamesInFeedLastOccurrenceWins()
         {
-            // Both entries named "Joker" match the villain parameter; the loop keeps
-            // overwriting the static field, so whichever occurs last in the feed wins.
+            // Both entries named "Joker" have the same lookup key; CharacterLookup.Build folds
+            // the feed in order and keeps overwriting that key, so whichever occurs last wins.
             using var host = WithCharacters(
                 Character("Batman", 8.3, "hero"),
                 Character("Joker", 8.2, "villain"),
@@ -261,8 +261,8 @@ namespace Superheroes.Tests
         [Fact]
         public async Task SameNameAsHeroAndVillainReturnsThatCharacter()
         {
-            // Both "if"s (not "else if") run for every item, so a single character matching
-            // both hero and villain is assigned to both static fields, and the ">" comparison
+            // The hero and villain lookups are independent (not "else if"), so a single character
+            // matching both names is assigned to both static fields, and the ">" comparison
             // against itself is false, so it comes back via the villain branch.
             using var host = WithCharacters(Character("Batman", 8.3, "hero"));
 
@@ -280,20 +280,9 @@ namespace Superheroes.Tests
         public async Task NullFeedFails()
         {
             // ICharactersProvider.GetCharacters() returning null (e.g. a failed/undeserializable
-            // S3 response) crashes with a NullReferenceException on "characters.Items".
+            // S3 response, or CharacterLookup.Build throwing on a null Items array - see
+            // CharacterLookupTests) crashes with a NullReferenceException on "characters.TryGetValue".
             using var host = WithNullFeed();
-
-            var response = await host.Battle("?hero=Batman&villain=Joker");
-
-            response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
-        }
-
-        [Fact]
-        public async Task NullItemsFails()
-        {
-            // A non-null CharactersResponse with a null Items array crashes the same way,
-            // since "foreach" over a null array throws.
-            using var host = WithNullItems();
 
             var response = await host.Battle("?hero=Batman&villain=Joker");
 
