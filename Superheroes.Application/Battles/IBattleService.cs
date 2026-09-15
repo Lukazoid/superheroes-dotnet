@@ -1,7 +1,6 @@
-namespace Superheroes.Application.Battles
+namespace Superheroes.Application.Battles;
+
+public interface IBattleService
 {
-    public interface IBattleService
-    {
-        Task<BattleResult> Battle(string? hero, string? villain);
-    }
+    Task<BattleResult> Battle(string? hero, string? villain);
 }

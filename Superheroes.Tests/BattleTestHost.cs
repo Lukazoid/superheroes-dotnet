@@ -5,66 +5,65 @@ using NSubstitute;
 using Superheroes.Application.Characters;
 using Superheroes.Application.Ports;
 
-namespace Superheroes.Tests
+namespace Superheroes.Tests;
+
+/// <summary>
+/// Wraps the WebApplicationFactory + ICharacterLoader swap that BattleTests.cs used to
+/// inline per-test, so every characterization test shares the same host setup.
+/// </summary>
+public sealed class BattleTestHost : IDisposable
 {
-    /// <summary>
-    /// Wraps the WebApplicationFactory + ICharacterLoader swap that BattleTests.cs used to
-    /// inline per-test, so every characterization test shares the same host setup.
-    /// </summary>
-    public sealed class BattleTestHost : IDisposable
+    private readonly WebApplicationFactory<Program> _factory;
+
+    public HttpClient Client { get; }
+
+    private BattleTestHost(CharacterCatalogue? characters)
     {
-        private readonly WebApplicationFactory<Program> _factory;
+        var characterLoader = Substitute.For<ICharacterLoader>();
+        // characters may genuinely be null here (WithNullFeed) - the null-forgiving operator
+        // only keeps NSubstitute's Returns<T> generic inference aligned on T = CharacterCatalogue
+        // rather than CharacterCatalogue?; it doesn't change what's actually returned.
+        characterLoader.GetCharacters().Returns(characters!);
 
-        public HttpClient Client { get; }
-
-        private BattleTestHost(CharacterCatalogue? characters)
-        {
-            var characterLoader = Substitute.For<ICharacterLoader>();
-            // characters may genuinely be null here (WithNullFeed) - the null-forgiving operator
-            // only keeps NSubstitute's Returns<T> generic inference aligned on T = CharacterCatalogue
-            // rather than CharacterCatalogue?; it doesn't change what's actually returned.
-            characterLoader.GetCharacters().Returns(characters!);
-
-            _factory = new WebApplicationFactory<Program>()
-                .WithWebHostBuilder(builder =>
+        _factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureServices(services =>
                 {
-                    builder.ConfigureServices(services =>
-                    {
-                        // Removes the whole ICharacterLoader registration chain (the S3 source
-                        // adapter and the CachingCharacterLoader decorated around it),
-                        // replacing it with the substitute.
-                        services.RemoveAll(typeof(ICharacterLoader));
-                        services.AddSingleton(characterLoader);
-                    });
+                    // Removes the whole ICharacterLoader registration chain (the S3 source
+                    // adapter and the CachingCharacterLoader decorated around it),
+                    // replacing it with the substitute.
+                    services.RemoveAll(typeof(ICharacterLoader));
+                    services.AddSingleton(characterLoader);
                 });
+            });
 
-            Client = _factory.CreateClient();
-        }
+        Client = _factory.CreateClient();
+    }
 
-        public static BattleTestHost WithCharacters(params Character[] characters) =>
-            new(CharacterCatalogue.Create(characters));
+    public static BattleTestHost WithCharacters(params Character[] characters) =>
+        new(CharacterCatalogue.Create(characters));
 
-        public static BattleTestHost WithNullFeed() =>
-            new(null);
+    public static BattleTestHost WithNullFeed() =>
+        new(null);
 
-        public static Character Character(string name, double score, string type, string? weakness = null) => type switch
-        {
-            "hero" => new Hero(name, score, weakness),
-            "villain" when weakness is null => new Villain(name, score),
-            "villain" => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
-            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown character type.")
-        };
+    public static Character Character(string name, double score, string type, string? weakness = null) => type switch
+    {
+        "hero" => new Hero(name, score, weakness),
+        "villain" when weakness is null => new Villain(name, score),
+        "villain" => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown character type.")
+    };
 
-        public Task<HttpResponseMessage> Battle(string queryString = "") =>
-            Client.GetAsync("battle" + queryString);
+    public Task<HttpResponseMessage> Battle(string queryString = "") =>
+        Client.GetAsync("battle" + queryString);
 
-        public Task<HttpResponseMessage> Send(HttpMethod method, string queryString = "") =>
-            Client.SendAsync(new HttpRequestMessage(method, "battle" + queryString));
+    public Task<HttpResponseMessage> Send(HttpMethod method, string queryString = "") =>
+        Client.SendAsync(new HttpRequestMessage(method, "battle" + queryString));
 
-        public void Dispose()
-        {
-            Client.Dispose();
-            _factory.Dispose();
-        }
+    public void Dispose()
+    {
+        Client.Dispose();
+        _factory.Dispose();
     }
 }

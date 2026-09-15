@@ -1,7 +1,6 @@
-namespace Superheroes.Application.Caching
+namespace Superheroes.Application.Caching;
+
+public class CharactersCacheOptions
 {
-    public class CharactersCacheOptions
-    {
-        public TimeSpan CacheDuration { get; set; } = TimeSpan.FromMinutes(5);
-    }
+    public TimeSpan CacheDuration { get; set; } = TimeSpan.FromMinutes(5);
 }
