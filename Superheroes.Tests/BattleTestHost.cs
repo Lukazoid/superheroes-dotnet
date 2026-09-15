@@ -1,15 +1,15 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using NSubstitute;
-using Superheroes.Application.Characters;
 using Superheroes.Application.Ports;
 
 namespace Superheroes.Tests;
 
 /// <summary>
 /// Wraps the WebApplicationFactory + ICharacterLoader swap that BattleTests.cs used to
-/// inline per-test, so every characterization test shares the same host setup.
+/// inline per-test, so every characterization test shares the same host setup. The caller
+/// owns the ICharacterLoader substitute and configures its GetCharacters() response, which
+/// lets each test set up its own data with the substitute visible at the call site.
 /// </summary>
 public sealed class BattleTestHost : IDisposable
 {
@@ -17,14 +17,8 @@ public sealed class BattleTestHost : IDisposable
 
     public HttpClient Client { get; }
 
-    private BattleTestHost(CharacterCatalogue? characters)
+    public BattleTestHost(ICharacterLoader characterLoader)
     {
-        var characterLoader = Substitute.For<ICharacterLoader>();
-        // characters may genuinely be null here (WithNullFeed) - the null-forgiving operator
-        // only keeps NSubstitute's Returns<T> generic inference aligned on T = CharacterCatalogue
-        // rather than CharacterCatalogue?; it doesn't change what's actually returned.
-        characterLoader.GetCharacters().Returns(characters!);
-
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
@@ -38,22 +32,11 @@ public sealed class BattleTestHost : IDisposable
                 });
             });
 
+        // Registered as the singleton instance above, so it's the same object the caller
+        // holds - a GetCharacters().Returns(...) configured after this constructor runs
+        // still takes effect, since nothing calls it until a request comes in.
         Client = _factory.CreateClient();
     }
-
-    public static BattleTestHost WithCharacters(params Character[] characters) =>
-        new(CharacterCatalogue.Create(characters));
-
-    public static BattleTestHost WithNullFeed() =>
-        new(null);
-
-    public static Character Character(string name, double score, CharacterType type, string? weakness = null) => type switch
-    {
-        CharacterType.Hero => new Hero(name, score, weakness),
-        CharacterType.Villain when weakness is null => new Villain(name, score),
-        CharacterType.Villain => throw new ArgumentException("Villains cannot have a weakness.", nameof(weakness)),
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown character type.")
-    };
 
     public Task<HttpResponseMessage> Battle(string queryString = "") =>
         Client.GetAsync("battle" + queryString);

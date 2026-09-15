@@ -3,8 +3,9 @@ using Shouldly;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using NSubstitute;
 using Superheroes.Application.Characters;
-using static Superheroes.Tests.BattleTestHost;
+using Superheroes.Application.Ports;
 
 namespace Superheroes.Tests;
 
@@ -25,8 +26,15 @@ internal static class JsonObjectExtensions
 /// exercised directly and far more thoroughly in BattleServiceTests.cs, so it is
 /// intentionally not duplicated here beyond one end-to-end happy path.
 /// </summary>
-public class BattleCharacterizationTests
+public class BattleCharacterizationTests : IDisposable
 {
+    private readonly ICharacterLoader _characterLoader = Substitute.For<ICharacterLoader>();
+    private readonly BattleTestHost _host;
+
+    public BattleCharacterizationTests() => _host = new BattleTestHost(_characterLoader);
+
+    public void Dispose() => _host.Dispose();
+
     private static async Task<JsonObject> BodyAsJson(HttpResponseMessage response)
     {
         var json = await response.Content.ReadAsStringAsync();
@@ -39,13 +47,15 @@ public class BattleCharacterizationTests
         // End-to-end sanity check that DI resolves IBattleService and the controller
         // wires its result through correctly - the winner-selection rules themselves
         // are BattleServiceTests' job.
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Battle("?hero=Batman&villain=Joker");
+        var response = await _host.Battle("?hero=Batman&villain=Joker");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await BodyAsJson(response);
-        body.Value<string>("name").ShouldBe("Batman");
+        body.Value<string>("name").ShouldBe(batman.Name);
     }
 
     // ----- Response contract -----
@@ -53,9 +63,11 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task ReturnsJsonContentType()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Battle("?hero=Batman&villain=Joker");
+        var response = await _host.Battle("?hero=Batman&villain=Joker");
 
         response.Content.Headers.ContentType!.ToString().ShouldBe("application/json; charset=utf-8");
     }
@@ -65,9 +77,11 @@ public class BattleCharacterizationTests
     {
         // Serialized with the default System.Text.Json formatter (AddNewtonsoftJson is
         // never called), so property names are camelCase, not PascalCase.
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Battle("?hero=Batman&villain=Joker");
+        var response = await _host.Battle("?hero=Batman&villain=Joker");
         var body = await BodyAsJson(response);
 
         body.ContainsKey("name").ShouldBeTrue();
@@ -77,9 +91,11 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task ResponseForHeroContainsNameScoreTypeAndWeakness()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Battle("?hero=Batman&villain=Joker");
+        var response = await _host.Battle("?hero=Batman&villain=Joker");
         var body = await BodyAsJson(response);
 
         body.Select(p => p.Key).ShouldBe(new[] { "name", "score", "type", "weakness" }, ignoreOrder: true);
@@ -90,9 +106,11 @@ public class BattleCharacterizationTests
     {
         // VillainResponse has no Weakness property, so a villain winner's JSON omits the
         // key entirely rather than reporting it as null the way a hero's does.
-        using var host = WithCharacters(Character("Gamora", 8.4, CharacterType.Hero), Character("Thanos", 9.9, CharacterType.Villain));
+        var gamora = new Hero("Gamora", 8.4, null);
+        var thanos = new Villain("Thanos", 9.9);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([gamora, thanos]));
 
-        var response = await host.Battle("?hero=Gamora&villain=Thanos");
+        var response = await _host.Battle("?hero=Gamora&villain=Thanos");
         var body = await BodyAsJson(response);
 
         body.Select(p => p.Key).ShouldBe(new[] { "name", "score", "type" }, ignoreOrder: true);
@@ -101,9 +119,11 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task ScoreIsSerialisedAsJsonNumber()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Battle("?hero=Batman&villain=Joker");
+        var response = await _host.Battle("?hero=Batman&villain=Joker");
         var body = await BodyAsJson(response);
 
         // System.Text.Json, unlike Newtonsoft's JTokenType (which distinguishes Integer from
@@ -117,9 +137,11 @@ public class BattleCharacterizationTests
     [Fact]
     public async Task EndpointRespondsToGet()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Send(HttpMethod.Get, "?hero=Batman&villain=Joker");
+        var response = await _host.Send(HttpMethod.Get, "?hero=Batman&villain=Joker");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
@@ -133,9 +155,11 @@ public class BattleCharacterizationTests
         // The action is decorated with [HttpGet] so it can be described in the OpenAPI
         // document (which has no way to express "matches any verb"), so attribute
         // routing now matches the path but rejects every other HTTP method.
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Send(new HttpMethod(verb), "?hero=Batman&villain=Joker");
+        var response = await _host.Send(new HttpMethod(verb), "?hero=Batman&villain=Joker");
 
         response.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
     }
@@ -147,13 +171,15 @@ public class BattleCharacterizationTests
         // case-insensitively regardless of the action signature's casing. This is MVC
         // model binding, distinct from BattleService's own case-insensitive character
         // name matching (see BattleServiceTests.CharacterNameMatchingIsCaseInsensitive).
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Battle("?Hero=Batman&Villain=Joker");
+        var response = await _host.Battle("?Hero=Batman&Villain=Joker");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await BodyAsJson(response);
-        body.Value<string>("name").ShouldBe("Batman");
+        body.Value<string>("name").ShouldBe(batman.Name);
     }
 
     // ----- Result translation -----
@@ -164,9 +190,11 @@ public class BattleCharacterizationTests
         // One representative case proving the controller turns a BattleResult's Errors
         // into a 400 with a ModelState-shaped JSON body. The full validation matrix
         // (hero-vs-hero, unknown names, etc.) lives in BattleServiceTests.cs.
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Superman", 9.6, CharacterType.Hero));
+        var batman = new Hero("Batman", 8.3, null);
+        var superman = new Hero("Superman", 9.6, null);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, superman]));
 
-        var response = await host.Battle("?hero=Batman&villain=Superman");
+        var response = await _host.Battle("?hero=Batman&villain=Superman");
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         var body = await BodyAsJson(response);
@@ -179,10 +207,12 @@ public class BattleCharacterizationTests
         // A null feed crashes BattleService with a NullReferenceException (pinned
         // directly in BattleServiceTests.NullFeedThrows); this confirms the app's
         // hosting pipeline still turns that into a 500 rather than leaking a raw
-        // exception to the client.
-        using var host = WithNullFeed();
+        // exception to the client. The null-forgiving operator here only keeps
+        // NSubstitute's Returns<T> generic inference aligned on T = CharacterCatalogue
+        // rather than CharacterCatalogue?; it doesn't change what's actually returned.
+        _characterLoader.GetCharacters().Returns((CharacterCatalogue)null!);
 
-        var response = await host.Battle("?hero=Batman&villain=Joker");
+        var response = await _host.Battle("?hero=Batman&villain=Joker");
 
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
     }
