@@ -1,5 +1,9 @@
+using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 
 namespace Superheroes.Tests
 {
@@ -13,22 +17,21 @@ namespace Superheroes.Tests
 
         public HttpClient Client { get; }
 
-        private BattleTestHost(CharactersResponse response)
+        private BattleTestHost(ImmutableDictionary<string, CharacterResponse> characters)
         {
-            var charactersProvider = new FakeCharactersProvider();
-            charactersProvider.FakeResponse(response);
+            var charactersProvider = Substitute.For<ICharactersProvider>();
+            charactersProvider.GetCharacters().Returns(characters);
 
             _factory = new WebApplicationFactory<Program>()
                 .WithWebHostBuilder(builder =>
                 {
                     builder.ConfigureServices(services =>
                     {
-                        var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ICharactersProvider));
-                        if (descriptor != null)
-                        {
-                            services.Remove(descriptor);
-                        }
-                        services.AddSingleton<ICharactersProvider>(charactersProvider);
+                        // Removes the whole ICharactersProvider registration chain (the source
+                        // provider and the CachingCharactersProvider decorated around it),
+                        // replacing it with the substitute.
+                        services.RemoveAll(typeof(ICharactersProvider));
+                        services.AddSingleton(charactersProvider);
                     });
                 });
 
@@ -36,7 +39,7 @@ namespace Superheroes.Tests
         }
 
         public static BattleTestHost WithCharacters(params CharacterResponse[] characters) =>
-            new(new CharactersResponse { Items = characters });
+            new(characters.ToImmutableDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase));
 
         public static BattleTestHost WithNullFeed() =>
             new(null);
