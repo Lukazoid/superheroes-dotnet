@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
 
@@ -11,6 +12,9 @@ namespace Superheroes.Tests
     public class CachingCharactersProviderTests
     {
         private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+
+        private static IOptions<CharactersCacheOptions> OptionsFor(TimeSpan duration) =>
+            Options.Create(new CharactersCacheOptions { CacheDuration = duration });
 
         private class FakeSystemClock : ISystemClock
         {
@@ -46,7 +50,7 @@ namespace Superheroes.Tests
             var (cache, _) = NewCache();
             var inner = new FakeCharactersProvider();
             inner.FakeResponse(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, CacheDuration, NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             var first = await sut.GetCharacters();
             var second = await sut.GetCharacters();
@@ -61,7 +65,7 @@ namespace Superheroes.Tests
             var (cache, clock) = NewCache();
             var inner = new FakeCharactersProvider();
             inner.FakeResponse(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, CacheDuration, NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             await sut.GetCharacters();
             clock.UtcNow += CacheDuration + TimeSpan.FromSeconds(1);
@@ -76,7 +80,7 @@ namespace Superheroes.Tests
             var (cache, _) = NewCache();
             var inner = new FakeCharactersProvider();
             inner.FakeResponse(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, CacheDuration, NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             await Task.WhenAll(
                 sut.GetCharacters(),
@@ -93,13 +97,13 @@ namespace Superheroes.Tests
         {
             var (cache, _) = NewCache();
             var throwing = new ThrowingCharactersProvider();
-            var sut = new CachingCharactersProvider(throwing, cache, CacheDuration, NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharactersProvider(throwing, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             await Should.ThrowAsync<InvalidOperationException>(() => sut.GetCharacters());
 
             var inner = new FakeCharactersProvider();
             inner.FakeResponse(SomeResponse());
-            var recovered = new CachingCharactersProvider(inner, cache, CacheDuration, NullLogger<CachingCharactersProvider>.Instance);
+            var recovered = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
 
             var response = await recovered.GetCharacters();
 
@@ -113,7 +117,7 @@ namespace Superheroes.Tests
             var (cache, _) = NewCache();
             var inner = new FakeCharactersProvider();
             inner.FakeResponse(SomeResponse());
-            var sut = new CachingCharactersProvider(inner, cache, TimeSpan.Zero, NullLogger<CachingCharactersProvider>.Instance);
+            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(TimeSpan.Zero), NullLogger<CachingCharactersProvider>.Instance);
 
             await sut.GetCharacters();
             await sut.GetCharacters();

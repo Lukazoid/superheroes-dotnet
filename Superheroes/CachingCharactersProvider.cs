@@ -2,12 +2,16 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Superheroes
 {
     public class CachingCharactersProvider : ICharactersProvider
     {
+        public const string SourceProviderKey = "characters-source";
+
         private const string CacheKey = "characters";
 
         private readonly ICharactersProvider _inner;
@@ -17,14 +21,14 @@ namespace Superheroes
         private readonly SemaphoreSlim _refreshLock = new SemaphoreSlim(1, 1);
 
         public CachingCharactersProvider(
-            ICharactersProvider inner,
+            [FromKeyedServices(SourceProviderKey)] ICharactersProvider inner,
             IMemoryCache cache,
-            TimeSpan cacheDuration,
+            IOptions<CharactersCacheOptions> options,
             ILogger<CachingCharactersProvider> logger)
         {
             _inner = inner;
             _cache = cache;
-            _cacheDuration = cacheDuration;
+            _cacheDuration = options.Value.CacheDuration;
             _logger = logger;
         }
 

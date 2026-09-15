@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Superheroes.Tests
 {
@@ -27,11 +28,9 @@ namespace Superheroes.Tests
                 {
                     builder.ConfigureServices(services =>
                     {
-                        var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ICharactersProvider));
-                        if (descriptor != null)
-                        {
-                            services.Remove(descriptor);
-                        }
+                        // Removes both the keyed source registration and the CachingCharactersProvider
+                        // decorator registered around it, replacing the whole chain with the fake.
+                        services.RemoveAll(typeof(ICharactersProvider));
                         services.AddSingleton<ICharactersProvider>(charactersProvider);
                     });
                 });

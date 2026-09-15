@@ -1,22 +1,13 @@
-using Microsoft.Extensions.Caching.Memory;
 using Superheroes;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
-builder.Services.AddSingleton<CharactersProvider>();
+builder.Services.Configure<CharactersCacheOptions>(builder.Configuration.GetSection("Characters"));
 
-var cacheDuration =
-    builder.Configuration.GetValue<TimeSpan?>("Characters:CacheDuration")
-    ?? TimeSpan.FromMinutes(5);
-
-builder.Services.AddSingleton<ICharactersProvider>(sp =>
-    new CachingCharactersProvider(
-        sp.GetRequiredService<CharactersProvider>(),
-        sp.GetRequiredService<IMemoryCache>(),
-        cacheDuration,
-        sp.GetRequiredService<ILogger<CachingCharactersProvider>>()));
+builder.Services.AddKeyedSingleton<ICharactersProvider, CharactersProvider>(CachingCharactersProvider.SourceProviderKey);
+builder.Services.AddSingleton<ICharactersProvider, CachingCharactersProvider>();
 
 var app = builder.Build();
 
