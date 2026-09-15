@@ -15,13 +15,15 @@ namespace Superheroes.Application.Tests;
 
 public class CachingCharacterLoaderTests
 {
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+    private readonly ICharacterLoader _inner = Substitute.For<ICharacterLoader>();
+    private readonly HybridCache _cache = NewCache();
+    private TimeSpan _cacheDuration = TimeSpan.FromMinutes(5);
 
-    private static IOptions<CharactersCacheOptions> OptionsFor(TimeSpan duration) =>
-        Options.Create(new CharactersCacheOptions { CacheDuration = duration });
-
-    private static CharacterCatalogue SomeResponse() =>
-        CharacterCatalogue.Create(new Character[] { new Hero("Batman", 8.3, null) });
+    private CachingCharacterLoader CreateSut() => new(
+        _inner,
+        _cache,
+        Options.Create(new CharactersCacheOptions { CacheDuration = _cacheDuration }),
+        NullLogger<CachingCharacterLoader>.Instance);
 
     // A fresh HybridCache per test - it only coordinates concurrent callers and tracks
     // expiry within a single instance, so each test needs its own to stay isolated.
@@ -40,15 +42,14 @@ public class CachingCharacterLoaderTests
     [Fact]
     public async Task ReturnsCachedResponseWithinDuration()
     {
-        var cache = NewCache();
-        var inner = Substitute.For<ICharacterLoader>();
-        inner.GetCharacters().Returns(SomeResponse());
-        var sut = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
+        var batman = new Hero("Batman", 8.3, null);
+        _inner.GetCharacters().Returns(CharacterCatalogue.Create([batman]));
+        var sut = CreateSut();
 
         var first = await sut.GetCharacters();
         var second = await sut.GetCharacters();
 
-        _ = inner.Received(1).GetCharacters();
+        _ = _inner.Received(1).GetCharacters();
         // HybridCache deserialises a fresh instance on every read (even from its local,
         // in-process tier) unless the cached type is sealed and [ImmutableObject(true)], so
         // reference equality isn't guaranteed - the call count and the values are what prove
@@ -63,10 +64,9 @@ public class CachingCharacterLoaderTests
         // does not preserve ImmutableDictionary's key comparer - a cache hit would otherwise
         // silently come back case-sensitive even though CharacterCatalogue.Create built it
         // with OrdinalIgnoreCase.
-        var cache = NewCache();
-        var inner = Substitute.For<ICharacterLoader>();
-        inner.GetCharacters().Returns(SomeResponse());
-        var sut = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
+        var batman = new Hero("Batman", 8.3, null);
+        _inner.GetCharacters().Returns(CharacterCatalogue.Create([batman]));
+        var sut = CreateSut();
 
         await sut.GetCharacters(); // populates the cache
         var second = await sut.GetCharacters(); // served from the cache
@@ -78,26 +78,24 @@ public class CachingCharacterLoaderTests
     [Fact]
     public async Task RefetchesAfterDurationExpires()
     {
-        var cache = NewCache();
-        var inner = Substitute.For<ICharacterLoader>();
-        inner.GetCharacters().Returns(SomeResponse());
-        var shortDuration = TimeSpan.FromMilliseconds(50);
-        var sut = new CachingCharacterLoader(inner, cache, OptionsFor(shortDuration), NullLogger<CachingCharacterLoader>.Instance);
+        var batman = new Hero("Batman", 8.3, null);
+        _inner.GetCharacters().Returns(CharacterCatalogue.Create([batman]));
+        _cacheDuration = TimeSpan.FromMilliseconds(50);
+        var sut = CreateSut();
 
         await sut.GetCharacters();
         await Task.Delay(TimeSpan.FromMilliseconds(250));
         await sut.GetCharacters();
 
-        _ = inner.Received(2).GetCharacters();
+        _ = _inner.Received(2).GetCharacters();
     }
 
     [Fact]
     public async Task ConcurrentCallsOnColdCacheOnlyFetchOnce()
     {
-        var cache = NewCache();
-        var inner = Substitute.For<ICharacterLoader>();
-        inner.GetCharacters().Returns(SomeResponse());
-        var sut = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
+        var batman = new Hero("Batman", 8.3, null);
+        _inner.GetCharacters().Returns(CharacterCatalogue.Create([batman]));
+        var sut = CreateSut();
 
         await Task.WhenAll(
             sut.GetCharacters(),
@@ -106,40 +104,39 @@ public class CachingCharacterLoaderTests
             sut.GetCharacters(),
             sut.GetCharacters());
 
-        _ = inner.Received(1).GetCharacters();
+        _ = _inner.Received(1).GetCharacters();
     }
 
     [Fact]
     public async Task PropagatesFailureAndDoesNotPoisonTheCache()
     {
-        var cache = NewCache();
-        var throwing = Substitute.For<ICharacterLoader>();
-        throwing.GetCharacters().Returns(Task.FromException<CharacterCatalogue>(new InvalidOperationException("S3 is unavailable")));
-        var sut = new CachingCharacterLoader(throwing, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
+        _inner.GetCharacters().Returns(Task.FromException<CharacterCatalogue>(new InvalidOperationException("S3 is unavailable")));
+        var sut = CreateSut();
 
         await Should.ThrowAsync<InvalidOperationException>(() => sut.GetCharacters());
 
-        var inner = Substitute.For<ICharacterLoader>();
-        inner.GetCharacters().Returns(SomeResponse());
-        var recovered = new CachingCharacterLoader(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharacterLoader>.Instance);
+        var batman = new Hero("Batman", 8.3, null);
+        _inner.GetCharacters().Returns(CharacterCatalogue.Create([batman]));
+        _inner.ClearReceivedCalls();
+        var recovered = CreateSut();
 
         var response = await recovered.GetCharacters();
 
-        _ = inner.Received(1).GetCharacters();
+        _ = _inner.Received(1).GetCharacters();
         response.ShouldNotBeNull();
     }
 
     [Fact]
     public async Task ZeroDurationDisablesCaching()
     {
-        var cache = NewCache();
-        var inner = Substitute.For<ICharacterLoader>();
-        inner.GetCharacters().Returns(SomeResponse());
-        var sut = new CachingCharacterLoader(inner, cache, OptionsFor(TimeSpan.Zero), NullLogger<CachingCharacterLoader>.Instance);
+        var batman = new Hero("Batman", 8.3, null);
+        _inner.GetCharacters().Returns(CharacterCatalogue.Create([batman]));
+        _cacheDuration = TimeSpan.Zero;
+        var sut = CreateSut();
 
         await sut.GetCharacters();
         await sut.GetCharacters();
 
-        _ = inner.Received(2).GetCharacters();
+        _ = _inner.Received(2).GetCharacters();
     }
 }

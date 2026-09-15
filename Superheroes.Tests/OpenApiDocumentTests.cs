@@ -2,8 +2,9 @@ using Xunit;
 using Shouldly;
 using System.Net;
 using System.Text.Json.Nodes;
+using NSubstitute;
 using Superheroes.Application.Characters;
-using static Superheroes.Tests.BattleTestHost;
+using Superheroes.Application.Ports;
 
 namespace Superheroes.Tests;
 
@@ -13,14 +14,23 @@ namespace Superheroes.Tests;
 /// (e.g. [HttpGet]) and its controller needs [ApiController] before ASP.NET Core's API
 /// Explorer will pick it up for OpenAPI generation at all.
 /// </summary>
-public class OpenApiDocumentTests
+public class OpenApiDocumentTests : IDisposable
 {
+    private readonly ICharacterLoader _characterLoader = Substitute.For<ICharacterLoader>();
+    private readonly BattleTestHost _host;
+
+    public OpenApiDocumentTests() => _host = new BattleTestHost(_characterLoader);
+
+    public void Dispose() => _host.Dispose();
+
     [Fact]
     public async Task DocumentDescribesBothBattleResponseCodes()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Client.GetAsync("openapi/v1.json");
+        var response = await _host.Client.GetAsync("openapi/v1.json");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var document = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
@@ -33,9 +43,11 @@ public class OpenApiDocumentTests
     [Fact]
     public async Task DocumentDescribesHeroAndVillainAsDiscriminatedVariantsOfCharacterResponse()
     {
-        using var host = WithCharacters(Character("Batman", 8.3, CharacterType.Hero), Character("Joker", 8.2, CharacterType.Villain));
+        var batman = new Hero("Batman", 8.3, null);
+        var joker = new Villain("Joker", 8.2);
+        _characterLoader.GetCharacters().Returns(CharacterCatalogue.Create([batman, joker]));
 
-        var response = await host.Client.GetAsync("openapi/v1.json");
+        var response = await _host.Client.GetAsync("openapi/v1.json");
         var document = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
 
         var discriminator = document["components"]!["schemas"]!["CharacterResponse"]!["discriminator"]!;

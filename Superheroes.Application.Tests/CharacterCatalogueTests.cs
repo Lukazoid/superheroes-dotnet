@@ -8,8 +8,8 @@ namespace Superheroes.Application.Tests;
 /// <summary>
 /// CharacterCatalogue.Create is the sole place duplicate-name detection happens, so every
 /// ICharacterLoader (currently just the S3 adapter) gets it for free rather than each having
-/// to reimplement it. Previously this behaviour was only pinned indirectly, via the test
-/// helper BattleServiceTests.ServiceFor built its fake provider's response with; it's real
+/// to reimplement it. Previously this behaviour was only pinned indirectly, via the fake
+/// ICharacterLoader BattleServiceTests configured its catalogues with; it's real
 /// production code now.
 /// </summary>
 public class CharacterCatalogueTests
