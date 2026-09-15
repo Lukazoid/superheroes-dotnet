@@ -17,13 +17,11 @@ namespace Superheroes.Tests
     }
 
     /// <summary>
-    /// Pins the current, unrefined behaviour of BattleController's /battle endpoint,
-    /// including its bugs, so upcoming changes (weaknesses, hero/villain validation,
-    /// removing the static comparison fields) show up as intentional, reviewed diffs
-    /// to this file rather than silent behaviour changes.
-    ///
-    /// See README.md for the intended behaviour this endpoint does NOT yet implement:
-    /// weaknesses knocking a point off a hero's score, and hero-vs-villain validation.
+    /// Pins the behaviour of BattleController's /battle endpoint - winner selection,
+    /// weakness scoring, hero/villain type validation, and the response/routing
+    /// contract - so future changes show up as intentional, reviewed diffs to this
+    /// file rather than silent behaviour changes. See README.md for the feature this
+    /// endpoint implements.
     /// </summary>
     public class BattleCharacterizationTests
     {
@@ -38,10 +36,9 @@ namespace Superheroes.Tests
         [Fact]
         public async Task HigherScoringHeroWins()
         {
-            // Absorbs BattleTests.CanGetHeros. Batman (8.3) beats Joker (8.2) purely on raw
-            // score - Batman's "weakness" to Joker (see characters.json) is not applied.
-            // This contradicts README acceptance test #1, which expects Joker to win once
-            // weaknesses are implemented.
+            // Absorbs BattleTests.CanGetHeros. Batman (8.3) beats Joker (8.2) on raw score.
+            // This Batman has no configured weakness, so no penalty applies - see
+            // WeaknessKnocksAPointOffTheHeroScore for the case where one does.
             using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
             var response = await host.Battle("?hero=Batman&villain=Joker");
@@ -66,8 +63,9 @@ namespace Superheroes.Tests
         [Fact]
         public async Task SupermanBeatsLexLuthor()
         {
-            // README acceptance test #2. Currently correct, but only by coincidence of raw
-            // score (9.6 > 8) - Superman's weakness to Lex Luthor is not actually applied.
+            // README acceptance test #2, using a Superman with no configured weakness - so
+            // this passes on raw score alone (9.6 > 8), same as it would even without the
+            // weakness rule. See WeaknessKnocksAPointOffTheHeroScore for the weakness path.
             using var host = WithCharacters(Character("Superman", 9.6, "hero"), Character("Lex Luthor", 8, "villain"));
 
             var response = await host.Battle("?hero=Superman&villain=Lex%20Luthor");
@@ -90,45 +88,86 @@ namespace Superheroes.Tests
             body.Value<string>("name").ShouldBe("Joker");
         }
 
-        // ----- Absent hero/villain validation -----
+        // ----- Weakness scoring -----
 
         [Fact]
-        public async Task HeroVersusHeroIsAccepted()
+        public async Task WeaknessKnocksAPointOffTheHeroScore()
         {
-            // Type is never inspected, so two heroes can "battle" each other.
-            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Superman", 9.6, "hero"));
+            // Batman's weakness is Joker: 8.3 - 1 = 7.3, which now loses to Joker's 8.2.
+            // Confirms README acceptance test #1 via the weakness rule itself, rather than
+            // by coincidence of raw score as in HigherScoringHeroWins.
+            using var host = WithCharacters(
+                Character("Batman", 8.3, "hero", weakness: "Joker"),
+                Character("Joker", 8.2, "villain"));
 
-            var response = await host.Battle("?hero=Batman&villain=Superman");
+            var response = await host.Battle("?hero=Batman&villain=Joker");
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
             var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Superman");
+            body.Value<string>("name").ShouldBe("Joker");
         }
 
         [Fact]
-        public async Task VillainVersusVillainIsAccepted()
+        public async Task WeaknessOnlyAppliesAgainstTheNamedVillain()
         {
-            using var host = WithCharacters(Character("Joker", 8.2, "villain"), Character("Thanos", 9.9, "villain"));
+            // Batman's weakness is Joker, but he isn't fighting Joker here, so no penalty
+            // applies and his raw score (8.3) still beats Thanos's 8.2.
+            using var host = WithCharacters(
+                Character("Batman", 8.3, "hero", weakness: "Joker"),
+                Character("Thanos", 8.2, "villain"));
 
-            var response = await host.Battle("?hero=Joker&villain=Thanos");
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Thanos");
-        }
-
-        [Fact]
-        public async Task SwappedHeroAndVillainParametersAreAccepted()
-        {
-            // Passing the villain's name as "hero" and the hero's name as "villain" is
-            // accepted without error - the winner still comes purely from comparing scores.
-            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
-
-            var response = await host.Battle("?hero=Joker&villain=Batman");
+            var response = await host.Battle("?hero=Batman&villain=Thanos");
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
             var body = await BodyAsJson(response);
             body.Value<string>("name").ShouldBe("Batman");
+        }
+
+        [Fact]
+        public async Task ReportedScoreIsNotAdjustedForWeakness()
+        {
+            // The -1 penalty affects only the winner comparison; the response still reports
+            // the hero's raw score, not the weakness-adjusted one.
+            using var host = WithCharacters(
+                Character("Superman", 9.6, "hero", weakness: "Lex Luthor"),
+                Character("Lex Luthor", 8, "villain"));
+
+            var response = await host.Battle("?hero=Superman&villain=Lex%20Luthor");
+            var body = await BodyAsJson(response);
+
+            body.Value<string>("name").ShouldBe("Superman");
+            body.Value<double>("score").ShouldBe(9.6);
+        }
+
+        // ----- Hero/villain type validation -----
+
+        [Fact]
+        public async Task HeroVersusHeroIsNotAccepted()
+        {
+            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Superman", 9.6, "hero"));
+
+            var response = await host.Battle("?hero=Batman&villain=Superman");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task VillainVersusVillainIsNotAccepted()
+        {
+            using var host = WithCharacters(Character("Joker", 8.2, "villain"), Character("Thanos", 9.9, "villain"));
+
+            var response = await host.Battle("?hero=Joker&villain=Thanos");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task SameNameAsHeroAndVillainIsNotAccepted()
+        {
+            // A single character has one Type, so using the same name for both hero and
+            // villain can never satisfy both checks at once.
+            using var host = WithCharacters(Character("Batman", 8.3, "hero"));
+
+            var response = await host.Battle("?hero=Batman&villain=Batman");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         }
 
         // ----- Response contract -----
@@ -158,16 +197,14 @@ namespace Superheroes.Tests
         }
 
         [Fact]
-        public async Task ResponseContainsOnlyNameScoreAndType()
+        public async Task ResponseContainsOnlyNameScoreTypeAndWeakness()
         {
-            // CharacterResponse has no Weakness property, so even though the source feed
-            // carries a "weakness" field, it never reaches the response.
             using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
             var response = await host.Battle("?hero=Batman&villain=Joker");
             var body = await BodyAsJson(response);
 
-            body.Select(p => p.Key).ShouldBe(new[] { "name", "score", "type" }, ignoreOrder: true);
+            body.Select(p => p.Key).ShouldBe(new[] { "name", "score", "type", "weakness" }, ignoreOrder: true);
         }
 
         [Fact]
@@ -217,37 +254,30 @@ namespace Superheroes.Tests
         }
 
         [Fact]
-        public async Task CharacterNameMatchingIsCaseSensitive()
+        public async Task CharacterNameMatchingIsCaseInsensitive()
         {
-            // Combines the case-sensitive "==" name match with the static-field leak: after
-            // priming with Aquaman as the hero, a differently-cased "batman" does NOT match
-            // the "Batman" entry, so the stale Aquaman value (score 3.5) is compared instead
-            // and loses to Joker. A case-insensitive match would have picked up Batman
-            // (8.3) and produced the opposite winner.
-            using var host = WithCharacters(
-                Character("Batman", 8.3, "hero"),
-                Character("Joker", 8.2, "villain"),
-                Character("Aquaman", 3.5, "hero"));
-
-            await host.Battle("?hero=Aquaman&villain=Joker"); // primes _character1 = Aquaman (3.5)
+            // Names are matched with StringComparison.InvariantCultureIgnoreCase, so a
+            // differently-cased "batman" still matches the "Batman" entry.
+            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
             var response = await host.Battle("?hero=batman&villain=Joker");
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
             var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Joker");
+            body.Value<string>("name").ShouldBe("Batman");
         }
 
         // ----- Feed quirks -----
 
         [Fact]
-        public async Task DuplicateNamesInFeedLastOccurrenceWins()
+        public async Task DuplicateNamesInFeedFirstOccurrenceWins()
         {
-            // Both entries named "Joker" match the villain parameter; the loop keeps
-            // overwriting the static field, so whichever occurs last in the feed wins.
+            // Both entries named "Joker" match the villain parameter, but the loop breaks
+            // as soon as both hero and villain are found, so the first match in the feed
+            // wins and the second "Joker" entry is never reached.
             using var host = WithCharacters(
                 Character("Batman", 8.3, "hero"),
-                Character("Joker", 8.2, "villain"),
+                Character("Joker", 8.6, "villain"),
                 Character("Joker", 9.9, "villain"));
 
             var response = await host.Battle("?hero=Batman&villain=Joker");
@@ -255,23 +285,7 @@ namespace Superheroes.Tests
 
             var body = await BodyAsJson(response);
             body.Value<string>("name").ShouldBe("Joker");
-            body.Value<double>("score").ShouldBe(9.9);
-        }
-
-        [Fact]
-        public async Task SameNameAsHeroAndVillainReturnsThatCharacter()
-        {
-            // Both "if"s (not "else if") run for every item, so a single character matching
-            // both hero and villain is assigned to both static fields, and the ">" comparison
-            // against itself is false, so it comes back via the villain branch.
-            using var host = WithCharacters(Character("Batman", 8.3, "hero"));
-
-            var response = await host.Battle("?hero=Batman&villain=Batman");
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Batman");
-            body.Value<double>("score").ShouldBe(8.3);
+            body.Value<double>("score").ShouldBe(8.6);
         }
 
         // ----- Error paths -----
@@ -300,77 +314,33 @@ namespace Superheroes.Tests
             response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
         }
 
-        // ----- Static-field leak across requests -----
-
         [Fact]
-        public async Task UnknownHeroReusesPreviousRequestsHero()
+        public async Task UnknownHeroReturnsBadRequest()
         {
-            // _character1/_character2 are static, so an unrecognised name doesn't clear
-            // the field or error - it silently leaves the previous request's character in
-            // place, and that stale value takes part in the comparison.
             using var host = WithCharacters(Character("Superman", 9.6, "hero"), Character("Joker", 8.2, "villain"));
 
-            var priming = await host.Battle("?hero=Superman&villain=Joker");
-            (await BodyAsJson(priming)).Value<string>("name").ShouldBe("Superman"); // sanity check the prime
-
             var response = await host.Battle("?hero=NobodyKnown&villain=Joker");
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Superman");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         }
 
         [Fact]
-        public async Task UnknownVillainReusesPreviousRequestsVillain()
+        public async Task UnknownVillainReturnsBadRequest()
         {
-            using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Thanos", 9.9, "villain"));
+            using var host = WithCharacters(Character("Superman", 9.6, "hero"), Character("Joker", 8.2, "villain"));
 
-            var priming = await host.Battle("?hero=Batman&villain=Thanos");
-            (await BodyAsJson(priming)).Value<string>("name").ShouldBe("Thanos"); // sanity check the prime
-
-            var response = await host.Battle("?hero=Batman&villain=NobodyKnown");
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Thanos");
+            var response = await host.Battle("?hero=Superman&villain=NobodyKnown");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         }
 
         [Fact]
-        public async Task MissingQueryParametersReuseThePreviousBattle()
+        public async Task MissingQueryParametersReturnsBadRequest()
         {
             // With no "hero"/"villain" query parameters at all (both bind to null), no feed
-            // entry ever matches, so the endpoint just replays the previous comparison.
+            // entry ever matches, so both fail validation.
             using var host = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain"));
 
-            var priming = await host.Battle("?hero=Batman&villain=Joker");
-            (await BodyAsJson(priming)).Value<string>("name").ShouldBe("Batman"); // sanity check the prime
-
             var response = await host.Battle();
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Batman");
-        }
-
-        [Fact]
-        public async Task StateLeaksAcrossSeparateTestHosts()
-        {
-            // The comparison fields are static on the BattleController type, not scoped to a
-            // WebApplicationFactory/DI container instance, so the leak survives disposing one
-            // host and standing up a completely independent one with an unrelated feed.
-            using (var hostA = WithCharacters(Character("Batman", 8.3, "hero"), Character("Joker", 8.2, "villain")))
-            {
-                var priming = await hostA.Battle("?hero=Batman&villain=Joker");
-                (await BodyAsJson(priming)).Value<string>("name").ShouldBe("Batman"); // sanity check the prime
-            }
-
-            using var hostB = WithCharacters(Character("Superman", 9.6, "hero"), Character("Lex Luthor", 8, "villain"));
-
-            var response = await hostB.Battle("?hero=NobodyKnown&villain=AlsoUnknown");
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var body = await BodyAsJson(response);
-            body.Value<string>("name").ShouldBe("Batman");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         }
     }
 }

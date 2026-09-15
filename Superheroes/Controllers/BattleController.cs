@@ -1,3 +1,4 @@
+#nullable enable annotations
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,36 +8,59 @@ namespace Superheroes.Controllers
     public class BattleController : Controller
     {
         private readonly ICharactersProvider _charactersProvider;
-        private static CharacterResponse _character1;
-        private static CharacterResponse _character2;
 
         public BattleController(ICharactersProvider charactersProvider)
         {
             _charactersProvider = charactersProvider;
         }
 
+        
         public async Task<IActionResult> Get(string hero, string villain)
         {
             var characters = await _charactersProvider.GetCharacters();
             
+            CharacterResponse? heroCharacter = null;
+            CharacterResponse? villainCharacter = null;
             foreach(var character in characters.Items)
             {
-                if(character.Name == hero)
+                if(string.Equals(character.Name, hero, StringComparison.InvariantCultureIgnoreCase) && character.Type == "hero")
                 {
-                    _character1 = character;
+                    heroCharacter = character;
                 }
-                if(character.Name == villain)
+                if(string.Equals(character.Name, villain, StringComparison.InvariantCultureIgnoreCase) && character.Type == "villain")
                 {
-                    _character2 = character;
+                    villainCharacter = character;
                 }
+
+                if (heroCharacter is not null && villainCharacter is not null)
+                    break;
             }
 
-            if(_character1.Score > _character2.Score)
+            if(heroCharacter is null)
             {
-                return Ok(_character1);
+                ModelState.AddModelError(nameof(hero), "Hero is required");
+            }
+            
+            if(villainCharacter is null)
+            {
+                ModelState.AddModelError(nameof(villain), "Villain is required");
             }
 
-            return Ok(_character2);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var heroScore = heroCharacter.Score;
+            if (heroCharacter.Weakness == villainCharacter.Name)
+            {
+                heroScore--;
+            }
+            
+            if(heroScore > villainCharacter.Score)
+            {
+                return Ok(heroCharacter);
+            }
+            
+            return Ok(villainCharacter);
         }
     }
 }
