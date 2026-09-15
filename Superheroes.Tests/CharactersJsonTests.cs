@@ -11,8 +11,15 @@ namespace Superheroes.Tests
     /// </summary>
     public class CharactersJsonTests
     {
+        // The feed puts "type" after "name"/"score", not first as System.Text.Json's
+        // polymorphic reader otherwise requires - see CharactersProvider for the same options.
+        private static readonly JsonSerializerOptions SerializerOptions = new()
+        {
+            AllowOutOfOrderMetadataProperties = true
+        };
+
         private static CharactersResponse Deserialize(string json) =>
-            JsonSerializer.Deserialize<CharactersResponse>(json);
+            JsonSerializer.Deserialize<CharactersResponse>(json, SerializerOptions);
 
         [Fact]
         public void RealCharactersFeedDeserializesAllElevenItems()
@@ -31,10 +38,9 @@ namespace Superheroes.Tests
 
             var result = Deserialize(json);
 
-            var batman = result.Items[0];
+            var batman = result.Items[0].ShouldBeOfType<HeroResponse>();
             batman.Name.ShouldBe("Batman");
             batman.Score.ShouldBe(8.3);
-            batman.Type.ShouldBe("hero");
             batman.Weakness.ShouldBe("Joker");
         }
 
@@ -53,9 +59,9 @@ namespace Superheroes.Tests
 
             result.Items.ShouldNotBeNull();
             result.Items.Length.ShouldBe(1);
-            result.Items[0].Name.ShouldBe("Batman");
-            result.Items[0].Score.ShouldBe(8.3);
-            result.Items[0].Type.ShouldBe("hero");
+            var batman = result.Items[0].ShouldBeOfType<HeroResponse>();
+            batman.Name.ShouldBe("Batman");
+            batman.Score.ShouldBe(8.3);
         }
 
         [Fact]
@@ -94,7 +100,46 @@ namespace Superheroes.Tests
 
             var result = Deserialize(json);
 
-            result.Items[0].Weakness.ShouldBe("Joker");
+            result.Items[0].ShouldBeOfType<HeroResponse>().Weakness.ShouldBe("Joker");
+        }
+
+        [Fact]
+        public void HeroTypeDeserializesToHeroResponse()
+        {
+            const string json = """
+                {"items":[{"name":"Batman","score":8.3,"type":"hero"}]}
+                """;
+
+            var result = Deserialize(json);
+
+            result.Items[0].ShouldBeOfType<HeroResponse>();
+        }
+
+        [Fact]
+        public void VillainTypeDeserializesToVillainResponseWithNoWeaknessProperty()
+        {
+            // VillainResponse has no Weakness property at all - unlike a hero with no
+            // configured weakness (a null Weakness), this isn't representable as null.
+            const string json = """
+                {"items":[{"name":"Joker","score":8.2,"type":"villain"}]}
+                """;
+
+            var result = Deserialize(json);
+
+            result.Items[0].ShouldBeOfType<VillainResponse>();
+        }
+
+        [Fact]
+        public void UnrecognizedTypeValueThrows()
+        {
+            // Unlike the old flat model - where an unrecognised "type" was just never matched
+            // by BattleController's string comparisons and silently skipped - the polymorphic
+            // discriminator rejects it eagerly, while parsing the feed itself.
+            const string json = """
+                {"items":[{"name":"Mystique","score":7.0,"type":"antihero"}]}
+                """;
+
+            Should.Throw<JsonException>(() => Deserialize(json));
         }
 
         [Fact]
