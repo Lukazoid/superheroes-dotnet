@@ -56,6 +56,25 @@ namespace Superheroes.Tests
         }
 
         [Fact]
+        public async Task LookupStaysCaseInsensitiveAfterACacheRoundTrip()
+        {
+            // Regression test: HybridCache round-trips cached values through serialization, which
+            // does not preserve ImmutableDictionary's key comparer - a cache hit would otherwise
+            // silently come back case-sensitive even though CharactersProvider built it with
+            // OrdinalIgnoreCase.
+            var cache = NewCache();
+            var inner = Substitute.For<ICharactersProvider>();
+            inner.GetCharacters().Returns(SomeResponse());
+            var sut = new CachingCharactersProvider(inner, cache, OptionsFor(CacheDuration), NullLogger<CachingCharactersProvider>.Instance);
+
+            await sut.GetCharacters(); // populates the cache
+            var second = await sut.GetCharacters(); // served from the cache
+
+            second.ContainsKey("batman").ShouldBeTrue();
+            second["BATMAN"].Name.ShouldBe("Batman");
+        }
+
+        [Fact]
         public async Task RefetchesAfterDurationExpires()
         {
             var cache = NewCache();

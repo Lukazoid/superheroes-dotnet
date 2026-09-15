@@ -10,10 +10,6 @@ namespace Superheroes.Tests
     /// <summary>
     /// Wraps the WebApplicationFactory + ICharactersProvider swap that BattleTests.cs used to
     /// inline per-test, so every characterization test shares the same host setup.
-    ///
-    /// Note: BattleController's comparison fields are static, so they persist across every
-    /// BattleTestHost instance created in the same test process, even after Dispose(). Tests
-    /// that rely on a specific starting state must prime it themselves.
     /// </summary>
     public sealed class BattleTestHost : IDisposable
     {
@@ -48,8 +44,8 @@ namespace Superheroes.Tests
         public static BattleTestHost WithNullFeed() =>
             new(null);
 
-        public static CharacterResponse Character(string name, double score, string type) =>
-            new() { Name = name, Score = score, Type = type };
+        public static CharacterResponse Character(string name, double score, string type, string weakness = null) =>
+            new() { Name = name, Score = score, Type = type, Weakness = weakness };
 
         public Task<HttpResponseMessage> Battle(string queryString = "") =>
             Client.GetAsync("battle" + queryString);

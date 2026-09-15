@@ -6,39 +6,27 @@ namespace Superheroes.Controllers
     [Route("battle")]
     public class BattleController : Controller
     {
-        private readonly ICharactersProvider _charactersProvider;
-        private static CharacterResponse _character1;
-        private static CharacterResponse _character2;
+        private readonly IBattleService _battleService;
 
-        public BattleController(ICharactersProvider charactersProvider)
+        public BattleController(IBattleService battleService)
         {
-            _charactersProvider = charactersProvider;
+            _battleService = battleService;
         }
 
         public async Task<IActionResult> Get(string hero, string villain)
         {
-            if(string.IsNullOrEmpty(hero) || string.IsNullOrEmpty(villain))
+            var result = await _battleService.Battle(hero, villain);
+
+            if (!result.Success)
             {
-                return BadRequest();
+                foreach (var error in result.Errors)
+                {
+                    ModelState.AddModelError(error.Key, error.Value);
+                }
+                return BadRequest(ModelState);
             }
 
-            var characters = await _charactersProvider.GetCharacters();
-
-            if(characters.TryGetValue(hero, out var heroCharacter))
-            {
-                _character1 = heroCharacter;
-            }
-            if(characters.TryGetValue(villain, out var villainCharacter))
-            {
-                _character2 = villainCharacter;
-            }
-
-            if(_character1.Score > _character2.Score)
-            {
-                return Ok(_character1);
-            }
-
-            return Ok(_character2);
+            return Ok(result.Winner);
         }
     }
 }

@@ -28,16 +28,16 @@ namespace Superheroes
             _logger = logger;
         }
 
-        public Task<ImmutableDictionary<string, CharacterResponse>> GetCharacters()
+        public async Task<ImmutableDictionary<string, CharacterResponse>> GetCharacters()
         {
             if (_cacheDuration <= TimeSpan.Zero)
             {
-                return _inner.GetCharacters();
+                return await _inner.GetCharacters();
             }
 
             // HybridCache.GetOrCreateAsync guarantees only one concurrent caller per key runs
             // this factory; every other caller waits for that result instead of also hitting S3.
-            return _cache.GetOrCreateAsync(
+            var characters = await _cache.GetOrCreateAsync(
                 CacheKey,
                 async cancellationToken =>
                 {
@@ -49,7 +49,14 @@ namespace Superheroes
                 {
                     Expiration = _cacheDuration,
                     LocalCacheExpiration = _cacheDuration
-                }).AsTask();
+                });
+
+            // HybridCache round-trips cached values through serialization (even for its local,
+            // in-process tier - see CachingCharactersProviderTests for where this was proven), and
+            // that round trip does not preserve ImmutableDictionary's key comparer: a cache hit
+            // would otherwise silently come back case-sensitive. Reapplying it here is cheap and
+            // makes the guarantee independent of whatever HybridCache does internally.
+            return characters.WithComparers(StringComparer.OrdinalIgnoreCase);
         }
     }
 }

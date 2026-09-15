@@ -8,6 +8,7 @@ builder.Services.Configure<CharactersCacheOptions>(builder.Configuration.GetSect
 
 builder.Services.AddSingleton<ICharactersProvider, CharactersProvider>();
 builder.Services.Decorate<ICharactersProvider, CachingCharactersProvider>();
+builder.Services.AddScoped<IBattleService, BattleService>();
 
 var app = builder.Build();
 

@@ -35,6 +35,7 @@ namespace Superheroes.Tests
             batman.Name.ShouldBe("Batman");
             batman.Score.ShouldBe(8.3);
             batman.Type.ShouldBe("hero");
+            batman.Weakness.ShouldBe("Joker");
         }
 
         [Fact]
@@ -82,12 +83,27 @@ namespace Superheroes.Tests
         }
 
         [Fact]
-        public void UnknownMemberIsIgnored()
+        public void WeaknessMemberBindsToWeaknessProperty()
         {
-            // "weakness" has no corresponding property on CharacterResponse. Both serializers
-            // ignore unknown members by default; this pins that it does not throw.
+            // "weakness" is lowercase in the feed like every other member, so it needs the
+            // same [JsonPropertyName] treatment as name/score/type to bind under
+            // System.Text.Json's default case-sensitive matching.
             const string json = """
                 {"items":[{"name":"Batman","score":8.3,"type":"hero","weakness":"Joker"}]}
+                """;
+
+            var result = Deserialize(json);
+
+            result.Items[0].Weakness.ShouldBe("Joker");
+        }
+
+        [Fact]
+        public void UnknownMemberIsIgnored()
+        {
+            // "nickname" has no corresponding property on CharacterResponse. Both serializers
+            // ignore unknown members by default; this pins that it does not throw.
+            const string json = """
+                {"items":[{"name":"Batman","score":8.3,"type":"hero","nickname":"The Dark Knight"}]}
                 """;
 
             var result = Deserialize(json);
